@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "433128612659",
+    "project_id": "brekingapp",
+    "storage_bucket": "brekingapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:433128612659:android:9d31be354ee7e962cf5446",
+        "android_client_info": {
+          "package_name": "com.news.brekingapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAlV4Ag-esrnuulofVzwqVjOb4ILZIbUpU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
