@@ -1,4 +1,4 @@
-import { View, FlatList, StyleSheet, RefreshControl, Text, Pressable } from 'react-native';
+import { View, FlatList, StyleSheet, RefreshControl, Text, Pressable, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -7,6 +7,7 @@ import AdCard from '@/components/AdCard';
 import CategoryFilter from '@/components/CategoryFilter';
 import CityPreferenceModal from '@/components/CityPreferenceModal';
 import OnboardingSlider, { hasCompletedOnboarding } from '@/components/OnboardingSlider';
+import AppGuideOverlay, { hasCompletedAppGuide } from '@/components/AppGuideOverlay';
 import { useAppStore } from '@/store';
 import { Ad, NewsItem } from '@/api';
 import { AppPalette } from '@/constants/theme';
@@ -48,6 +49,7 @@ export default function HomeScreen() {
 
   const [showCityModal, setShowCityModal] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showAppGuide, setShowAppGuide] = useState(false);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const viewedNewsIdsRef = useRef<Set<string>>(new Set());
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
@@ -62,10 +64,11 @@ export default function HomeScreen() {
   }).current;
 
   const loadData = useCallback(async () => {
-    const [savedCityIds, onboardingDone, cityPreferenceSetupDone] = await Promise.all([
+    const [savedCityIds, onboardingDone, cityPreferenceSetupDone, appGuideDone] = await Promise.all([
       loadCityPreferences(),
       hasCompletedOnboarding(),
       AsyncStorage.getItem(CITY_PREFERENCE_SETUP_KEY),
+      hasCompletedAppGuide(),
     ]);
 
     await Promise.all([fetchCategories(), fetchAdvertisements(), fetchCities(), loadSavedNews()]);
@@ -74,6 +77,8 @@ export default function HomeScreen() {
       setShowOnboarding(true);
     } else if (!cityPreferenceSetupDone) {
       setShowCityModal(true);
+    } else if (!appGuideDone) {
+      setShowAppGuide(true);
     }
 
     await fetchNews({
@@ -106,13 +111,10 @@ export default function HomeScreen() {
     });
   });
 
-  const selectedCityLabel = selectedCityPreferences.length === 0
+  const selectedCityCount = selectedCityPreferences.length;
+  const selectedCityLabel = selectedCityCount === 0
     ? 'All cities'
-    : cities
-        .filter((city) => selectedCityPreferences.includes(city._id))
-        .map((city) => city.name)
-        .slice(0, 2)
-        .join(', ') || 'Cities';
+    : `${selectedCityCount} ${selectedCityCount === 1 ? 'city' : 'cities'}`;
 
   const renderItem = ({ item }: { item: FeedItem }) => {
     if (item.type === 'ad') return <AdCard item={item.data} />;
@@ -124,15 +126,32 @@ export default function HomeScreen() {
       <View style={styles.container}>
         <View style={styles.hero}>
           <View style={styles.heroTopRow}>
-            <View style={styles.heroTextWrap}>
-              <Text style={styles.eyebrow}>Good to see you</Text>
-              <Text style={styles.heroTitle}>Latest local news</Text>
+            <View style={styles.logoBox}>
+              <View style={styles.logoImageWrap}>
+                <Image
+                  source={require('../../assets/images/icon.png')}
+                  style={styles.logo}
+                  resizeMode="contain"
+                />
+              </View>
+
+              <View style={styles.logoTextWrap}>
+                <Text style={styles.logoTitle} numberOfLines={1}>INMinut</Text>
+                {/* <Text style={styles.logoSub} numberOfLines={1}>Latest local news</Text> */}
+              </View>
             </View>
-            <Pressable style={styles.cityButton} onPress={() => setShowCityModal(true)}>
-              <Ionicons name="location-outline" size={17} color={AppPalette.brightOrange} />
-              <Text style={styles.cityButtonText} numberOfLines={1}>{selectedCityLabel}</Text>
-              <Ionicons name="chevron-down" size={15} color={AppPalette.muted} />
-            </Pressable>
+
+            <View style={styles.headerActions}>
+              <Pressable style={styles.helpButton} onPress={() => setShowAppGuide(true)} hitSlop={8}>
+                <Ionicons name="help-circle-outline" size={22} color={AppPalette.deepBlue} />
+              </Pressable>
+
+              <Pressable style={styles.cityButton} onPress={() => setShowCityModal(true)}>
+                <Ionicons name="location-outline" size={17} color={AppPalette.brightOrange} />
+                <Text style={styles.cityButtonText} numberOfLines={1}>{selectedCityLabel}</Text>
+                <Ionicons name="chevron-down" size={15} color={AppPalette.muted} />
+              </Pressable>
+            </View>
           </View>
         </View>
 
@@ -163,7 +182,13 @@ export default function HomeScreen() {
           onDone={() => {
             setShowOnboarding(false);
             AsyncStorage.getItem(CITY_PREFERENCE_SETUP_KEY).then((done) => {
-              if (!done) setShowCityModal(true);
+              if (!done) {
+                setShowCityModal(true);
+              } else {
+                hasCompletedAppGuide().then((guideDone) => {
+                  if (!guideDone) setShowAppGuide(true);
+                });
+              }
             });
           }}
         />
@@ -176,13 +201,19 @@ export default function HomeScreen() {
           onClose={async () => {
             await AsyncStorage.setItem(CITY_PREFERENCE_SETUP_KEY, 'true');
             setShowCityModal(false);
+            const guideDone = await hasCompletedAppGuide();
+            if (!guideDone) setShowAppGuide(true);
           }}
           onSave={async (cityIds) => {
             await AsyncStorage.setItem(CITY_PREFERENCE_SETUP_KEY, 'true');
             await saveCityPreferences(cityIds);
             setShowCityModal(false);
+            const guideDone = await hasCompletedAppGuide();
+            if (!guideDone) setShowAppGuide(true);
           }}
         />
+
+        <AppGuideOverlay visible={showAppGuide} onFinish={() => setShowAppGuide(false)} />
       </View>
     </SafeAreaView>
   );
@@ -192,27 +223,101 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#EFF6FF' },
   container: { flex: 1, backgroundColor: '#EFF6FF' },
   hero: {
-    paddingHorizontal: 18,
-    paddingTop: 10,
-    paddingBottom: 14,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
     backgroundColor: '#EFF6FF',
   },
   heroTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: 10,
   },
-  heroTextWrap: { flex: 1 },
+  headerActions: {
+    flexShrink: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  helpButton: {
+    height: 42,
+    width: 42,
+    borderRadius: 21,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoBox: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    // backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    paddingVertical: 8,
+    paddingLeft: 8,
+    paddingRight: 12,
+    // borderWidth: 1,
+    // borderColor: '#BAE6FD',
+    // shadowColor: '#0F172A',
+    // shadowOffset: { width: 0, height: 5 },
+    // shadowOpacity: 0.08,
+    // shadowRadius: 12,
+    // elevation: 3,
+  },
+
+  logoImageWrap: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+
+  logo: {
+    width: 40,
+    height: 40,
+  },
+
+  logoTextWrap: {
+    flex: 1,
+    minWidth: 0,
+    marginLeft: 10,
+  },
+
+  logoTitle: {
+    color: '#0F172A',
+    fontSize: 22,
+    lineHeight: 27,
+    fontWeight: '900',
+    letterSpacing: -0.3,
+  },
+
+  logoSub: {
+    marginTop: 1,
+    color: AppPalette.slate,
+    fontSize: 11.5,
+    lineHeight: 15,
+    fontWeight: '800',
+  },
   cityButton: {
-    maxWidth: 148,
-    minHeight: 42,
+    maxWidth: 118,
+    height: 42,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 8,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#BAE6FD',
+    flexShrink: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,

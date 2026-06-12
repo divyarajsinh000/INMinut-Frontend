@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { City } from '@/api';
 import { AppPalette } from '@/constants/theme';
@@ -23,14 +23,27 @@ const CityPreferenceModal = ({
   onClose,
 }: Props) => {
   const [localSelected, setLocalSelected] = useState<string[]>(selectedCityIds || []);
+  const [searchText, setSearchText] = useState('');
 
   useEffect(() => {
-    if (visible) setLocalSelected(selectedCityIds || []);
+    if (visible) {
+      setLocalSelected(selectedCityIds || []);
+      setSearchText('');
+    }
   }, [selectedCityIds, visible]);
 
   const groupedCities = useMemo(() => {
-    return [...cities].sort((a, b) => a.name.localeCompare(b.name));
-  }, [cities]);
+    const query = searchText.trim().toLowerCase();
+
+    return [...cities]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .filter((city) => {
+        if (!query) return true;
+        const cityName = city.name?.toLowerCase() || '';
+        const stateName = city.state?.name?.toLowerCase() || '';
+        return cityName.includes(query) || stateName.includes(query);
+      });
+  }, [cities, searchText]);
 
   const toggleCity = (cityId: string) => {
     setLocalSelected((prev) =>
@@ -58,49 +71,81 @@ const CityPreferenceModal = ({
             </View>
             <View style={{ flex: 1 }}>
               <ThemedText style={styles.title}>Choose your cities</ThemedText>
-              <ThemedText style={styles.subtitle}>
+              {/* <ThemedText style={styles.subtitle}>
                 Select cities to personalize your feed, or continue with all cities.
-              </ThemedText>
+              </ThemedText> */}
             </View>
           </View>
 
           <View style={styles.selectedBox}>
-            <ThemedText style={styles.selectedCount}>{localSelected.length}</ThemedText>
-            <ThemedText style={styles.selectedLabel}>
-              {localSelected.length === 0 ? 'All cities selected' : localSelected.length === 1 ? 'city selected' : 'cities selected'}
-            </ThemedText>
+            <View style={styles.selectedIconWrap}>
+              <Ionicons name="business-outline" size={18} color={AppPalette.brightOrange} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <ThemedText style={styles.selectedLabel}>
+                {localSelected.length === 0 ? 'Showing news from every city' : `${localSelected.length} ${localSelected.length === 1 ? 'city' : 'cities'} selected`}
+              </ThemedText>
+              {/* <ThemedText style={styles.selectedHint}>
+                {localSelected.length === 0 ? 'Tap city names below to filter your feed.' : 'Tap selected city again to remove it.'}
+              </ThemedText> */}
+            </View>
           </View>
 
-          <ScrollView style={styles.cityList} contentContainerStyle={styles.cityListContent}>
+          <View style={styles.searchBox}>
+            <Ionicons name="search-outline" size={18} color={AppPalette.muted} />
+            <TextInput
+              value={searchText}
+              onChangeText={setSearchText}
+              placeholder="Search city or state"
+              placeholderTextColor={AppPalette.muted}
+              style={styles.searchInput}
+            />
+            {!!searchText && (
+              <Pressable onPress={() => setSearchText('')} hitSlop={8}>
+                <Ionicons name="close-circle" size={18} color={AppPalette.muted} />
+              </Pressable>
+            )}
+          </View>
+
+          <ScrollView style={styles.cityList} contentContainerStyle={styles.cityListContent} showsVerticalScrollIndicator={false}>
             <Pressable
               onPress={() => setLocalSelected([])}
-              style={[styles.cityPill, localSelected.length === 0 && styles.cityPillSelected]}
+              style={[styles.cityRow, localSelected.length === 0 && styles.cityRowSelected]}
             >
-              <Ionicons
-                name={localSelected.length === 0 ? 'checkmark-circle' : 'globe-outline'}
-                size={18}
-                color={localSelected.length === 0 ? '#fff' : AppPalette.brightOrange}
-              />
-              <ThemedText style={[styles.cityText, localSelected.length === 0 && styles.cityTextSelected]}>
-                All cities
-              </ThemedText>
+              <View style={[styles.checkbox, localSelected.length === 0 && styles.checkboxSelected]}>
+                <Ionicons
+                  name={localSelected.length === 0 ? 'checkmark' : 'globe-outline'}
+                  size={15}
+                  color={localSelected.length === 0 ? '#fff' : AppPalette.brightOrange}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <ThemedText style={styles.cityName}>All cities</ThemedText>
+                {/* <ThemedText style={styles.cityState}>Show news from every available city</ThemedText> */}
+              </View>
             </Pressable>
+
             {groupedCities.map((city) => {
               const selected = localSelected.includes(city._id);
               return (
                 <Pressable
                   key={city._id}
                   onPress={() => toggleCity(city._id)}
-                  style={[styles.cityPill, selected && styles.cityPillSelected]}
+                  style={[styles.cityRow, selected && styles.cityRowSelected]}
                 >
-                  <Ionicons
-                    name={selected ? 'checkmark-circle' : 'ellipse-outline'}
-                    size={18}
-                    color={selected ? '#fff' : AppPalette.brightOrange}
-                  />
-                  <ThemedText style={[styles.cityText, selected && styles.cityTextSelected]}>
-                    {city.name}{city.state?.name ? `, ${city.state.name}` : ''}
-                  </ThemedText>
+                  <View style={[styles.checkbox, selected && styles.checkboxSelected]}>
+                    <Ionicons
+                      name={selected ? 'checkmark' : 'ellipse-outline'}
+                      size={15}
+                      color={selected ? '#fff' : AppPalette.brightOrange}
+                    />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <ThemedText style={styles.cityName} numberOfLines={1}>{city.name}  {!!city.state?.name && (
+                      <ThemedText style={styles.cityState} numberOfLines={1}>{city.state.name}</ThemedText>
+                    )}</ThemedText>
+                   
+                  </View>
                 </Pressable>
               );
             })}
@@ -108,6 +153,10 @@ const CityPreferenceModal = ({
 
           {cities.length === 0 && (
             <ThemedText style={styles.emptyText}>No cities available. Add cities from admin panel first.</ThemedText>
+          )}
+
+          {cities.length > 0 && groupedCities.length === 0 && (
+            <ThemedText style={styles.emptyText}>No city found for this search.</ThemedText>
           )}
 
           <View style={styles.actions}>
@@ -175,43 +224,89 @@ const styles = StyleSheet.create({
   selectedBox: {
     marginTop: 18,
     marginBottom: 12,
-    padding: 14,
-    borderRadius: 20,
+    padding: 13,
+    borderRadius: 18,
     backgroundColor: '#EFF6FF',
     borderWidth: 1,
     borderColor: '#BAE6FD',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
-  selectedCount: {
-    color: AppPalette.brightOrange,
-    fontWeight: '900',
-    fontSize: 22,
+  selectedIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   selectedLabel: {
     color: AppPalette.ink,
-    fontWeight: '800',
+    fontWeight: '900',
+    fontSize: 14,
   },
-  cityList: { maxHeight: 420 },
-  cityListContent: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingBottom: 10 },
-  cityPill: {
+  selectedHint: {
+    marginTop: 2,
+    color: AppPalette.muted,
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  searchBox: {
+    height: 46,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#BAE6FD',
-    backgroundColor: '#F0F9FF',
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    borderRadius: 999,
+    backgroundColor: '#F8FAFC',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    paddingHorizontal: 13,
+    gap: 8,
+    marginBottom: 10,
   },
-  cityPillSelected: {
+  searchInput: {
+    flex: 1,
+    color: AppPalette.ink,
+    fontSize: 14,
+    fontWeight: '800',
+    paddingVertical: 0,
+  },
+  cityList: { maxHeight: 390 },
+  cityListContent: { gap: 8, paddingBottom: 10 },
+  cityRow: {
+    minHeight: 45,
+    borderWidth: 1,
+    borderColor: '#E0F2FE',
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  cityRowSelected: {
+    backgroundColor: '#FFF7ED',
+    borderColor: AppPalette.brightOrange,
+  },
+  checkbox: {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#FDBA74',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxSelected: {
     backgroundColor: AppPalette.brightOrange,
     borderColor: AppPalette.brightOrange,
   },
-  cityText: { color: AppPalette.ink, fontWeight: '800' },
-  cityTextSelected: { color: '#fff' },
+  cityName: { color: AppPalette.ink, fontWeight: '900', fontSize: 14 },
+  cityState: { marginTop: 2, color: AppPalette.muted, fontWeight: '700', fontSize: 12 },
   emptyText: { textAlign: 'center', color: AppPalette.muted, paddingVertical: 18 },
   actions: { flexDirection: 'row', gap: 10, marginTop: 16 },
   button: { flex: 1, paddingVertical: 15, borderRadius: 18, alignItems: 'center' },

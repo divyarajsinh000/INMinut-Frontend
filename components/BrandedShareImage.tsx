@@ -63,7 +63,7 @@ export default function BrandedShareImage({
 
           <View style={styles.logoTextWrap}>
             <Text style={styles.logoTitle}>INMinut</Text>
-            <Text style={styles.logoSub}>DIGITAL</Text>
+            {/* <Text style={styles.logoSub}>DIGITAL</Text> */}
           </View>
         </View>
       </View>
