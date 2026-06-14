@@ -6,10 +6,22 @@ import NewsCard from '@/components/NewsCard';
 import { useAppStore } from '@/store';
 import { NewsItem } from '@/api';
 import { AppPalette } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function SearchScreen() {
   const { news, setSearchQuery, searchQuery, fetchNews, isLoading } = useAppStore();
   const [localQuery, setLocalQuery] = useState(searchQuery);
+
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
+  const themeStyles = {
+    bg: isDark ? '#0F172A' : '#EFF6FF',
+    card: isDark ? '#1E293B' : '#FFFFFF',
+    text: isDark ? '#F8FAFC' : '#0F172A',
+    border: isDark ? '#334155' : '#BAE6FD',
+    textSecondary: isDark ? '#94A3B8' : '#475569',
+  };
 
   useEffect(() => {
     if (localQuery) fetchNews({ search: localQuery });
@@ -23,16 +35,16 @@ export default function SearchScreen() {
   const renderItem = ({ item }: { item: NewsItem }) => <NewsCard item={item} />;
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        <Text style={styles.title}>Search stories</Text>
-        <Text style={styles.subtitle}>Find latest updates by title, city, reporter or keyword.</Text>
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color={AppPalette.muted} />
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: themeStyles.bg }]}>
+      <View style={[styles.container, { backgroundColor: themeStyles.bg }]}>
+        <Text style={[styles.title, { color: themeStyles.text }]}>Search stories</Text>
+        <Text style={[styles.subtitle, { color: themeStyles.textSecondary }]}>Find latest updates by title, city, reporter or keyword.</Text>
+        <View style={[styles.searchContainer, { backgroundColor: themeStyles.card, borderColor: themeStyles.border }]}>
+          <Ionicons name="search" size={20} color={themeStyles.textSecondary} />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: themeStyles.text }]}
             placeholder="Search news..."
-            placeholderTextColor="#98A2B3"
+            placeholderTextColor={isDark ? '#64748B' : '#98A2B3'}
             value={localQuery}
             onChangeText={handleSearch}
             autoFocus
@@ -41,14 +53,14 @@ export default function SearchScreen() {
 
         {localQuery ? (
           isLoading ? (
-            <Text style={styles.stateText}>Searching...</Text>
+            <Text style={[styles.stateText, { color: themeStyles.textSecondary }]}>Searching...</Text>
           ) : news.length > 0 ? (
             <FlatList data={news} renderItem={renderItem} keyExtractor={(item) => item._id} contentContainerStyle={styles.listContainer} showsVerticalScrollIndicator={false} />
           ) : (
-            <Text style={styles.stateText}>No results found</Text>
+            <Text style={[styles.stateText, { color: themeStyles.textSecondary }]}>No results found</Text>
           )
         ) : (
-          <Text style={styles.stateText}>Start typing to search...</Text>
+          <Text style={[styles.stateText, { color: themeStyles.textSecondary }]}>Start typing to search...</Text>
         )}
       </View>
     </SafeAreaView>

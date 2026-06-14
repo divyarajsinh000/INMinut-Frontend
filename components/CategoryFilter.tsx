@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Category } from '@/api';
 import { AppPalette, Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 interface CategoryFilterProps {
   categories: Category[];
@@ -13,6 +14,15 @@ export default function CategoryFilter({
   selectedCategoryId,
   onSelectCategory,
 }: CategoryFilterProps) {
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
+  const themeStyles = {
+    card: isDark ? '#1C2541' : '#FFFFFF',
+    text: isDark ? '#F8FAFC' : '#0F172A',
+    border: isDark ? '#3A506B' : '#BAE6FD',
+  };
+
   return (
     <ScrollView
       horizontal
@@ -23,11 +33,12 @@ export default function CategoryFilter({
         activeOpacity={0.82}
         style={[
           styles.categoryItem,
+          { backgroundColor: themeStyles.card, borderColor: themeStyles.border },
           !selectedCategoryId && styles.selectedCategory,
         ]}
         onPress={() => onSelectCategory(null)}
       >
-        <Text style={[styles.categoryText, !selectedCategoryId && { color: Colors.white }]} numberOfLines={1}>
+        <Text style={[styles.categoryText, !selectedCategoryId && { color: Colors.white }, selectedCategoryId && { color: themeStyles.text }]} numberOfLines={1}>
           All
         </Text>
       </TouchableOpacity>
@@ -40,6 +51,7 @@ export default function CategoryFilter({
             key={category._id}
             style={[
               styles.categoryItem,
+              { backgroundColor: themeStyles.card, borderColor: themeStyles.border },
               selected && {
                 backgroundColor: category.backgroundColor || Colors.brightOrange,
                 borderColor: category.backgroundColor || Colors.brightOrange,
@@ -50,7 +62,7 @@ export default function CategoryFilter({
             <Text
               style={[
                 styles.categoryText,
-                { color: selected ? category.textColor || Colors.white : AppPalette.ink },
+                { color: selected ? category.textColor || Colors.white : themeStyles.text },
               ]}
               numberOfLines={1}
               ellipsizeMode="tail"
@@ -67,14 +79,14 @@ export default function CategoryFilter({
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 4,
     gap: 8,
   },
   categoryItem: {
-    paddingHorizontal: 16,
-    paddingVertical: 9,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
     borderRadius: 999,
-    height: 40,
+    height: 32,
     justifyContent: 'center',
     backgroundColor: '#fff',
     borderWidth: 1,
@@ -85,7 +97,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.brightOrange,
   },
   categoryText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '800',
   },
 });

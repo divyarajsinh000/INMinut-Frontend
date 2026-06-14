@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { NewsItem, Category, City, Ad, api } from '@/api';
+import { NewsItem, Category, City, Ad, EmbedItem, api } from '@/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getOrCreateGuestId } from '@/utils/notifications';
 
@@ -9,6 +9,7 @@ const CITY_PREFERENCES_KEY = 'city_preferences';
 interface AppState {
   news: NewsItem[];
   advertisements: Ad[];
+  embeds: EmbedItem[];
   categories: Category[];
   cities: City[];
   selectedCityPreferences: string[];
@@ -17,9 +18,11 @@ interface AppState {
   searchQuery: string;
   isLoading: boolean;
   error: string | null;
+  theme: 'light' | 'dark';
 
   fetchNews: (params?: { category?: string; search?: string; cityIds?: string[] }) => Promise<void>;
   fetchAdvertisements: () => Promise<void>;
+  fetchEmbeds: () => Promise<void>;
   fetchCategories: () => Promise<void>;
   fetchCities: () => Promise<void>;
   loadCityPreferences: () => Promise<string[]>;
@@ -31,11 +34,16 @@ interface AppState {
   setSelectedCategory: (categoryId: string | null) => void;
   setSearchQuery: (query: string) => void;
   resetFilters: () => void;
+  setTheme: (theme: 'light' | 'dark') => Promise<void>;
+  loadTheme: () => Promise<void>;
+  trackAdInteraction: (adId: string, action: 'view' | 'click') => Promise<void>;
+  trackEmbedInteraction: (embedId: string, action: 'view' | 'click') => Promise<void>;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
   news: [],
   advertisements: [],
+  embeds: [],
   categories: [],
   cities: [],
   selectedCityPreferences: [],
@@ -44,6 +52,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   searchQuery: '',
   isLoading: false,
   error: null,
+  theme: 'light',
 
   fetchNews: async (params) => {
     try {
@@ -64,6 +73,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch (err) {
       console.error('Fetch advertisements error:', err);
       set({ advertisements: [] });
+    }
+  },
+
+  fetchEmbeds: async () => {
+    try {
+      const embeds = await api.getEmbeds();
+      set({ embeds });
+    } catch (err) {
+      console.error('Fetch embeds error:', err);
+      set({ embeds: [] });
     }
   },
 
@@ -206,6 +225,36 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
+  trackAdInteraction: async (adId, action) => {
+    try {
+      const result = await api.trackAdInteraction(adId, action);
+      set({
+        advertisements: get().advertisements.map((item) =>
+          item._id === adId
+            ? { ...item, viewCount: result.viewCount, clickCount: result.clickCount }
+            : item
+        ),
+      });
+    } catch (err) {
+      console.log('Ad interaction tracking skipped:', err);
+    }
+  },
+
+  trackEmbedInteraction: async (embedId, action) => {
+    try {
+      const result = await api.trackEmbedInteraction(embedId, action);
+      set({
+        embeds: get().embeds.map((item) =>
+          item._id === embedId
+            ? { ...item, viewCount: result.viewCount, clickCount: result.clickCount }
+            : item
+        ),
+      });
+    } catch (err) {
+      console.log('Embed interaction tracking skipped:', err);
+    }
+  },
+
   setSelectedCategory: (categoryId) => set({ selectedCategory: categoryId }),
   setSearchQuery: (query) => set({ searchQuery: query }),
   resetFilters: () =>
@@ -213,4 +262,20 @@ export const useAppStore = create<AppState>((set, get) => ({
       selectedCategory: null,
       searchQuery: '',
     }),
+
+  setTheme: async (theme) => {
+    set({ theme });
+    await AsyncStorage.setItem('theme_preference', theme);
+  },
+
+  loadTheme: async () => {
+    try {
+      const saved = await AsyncStorage.getItem('theme_preference');
+      if (saved === 'light' || saved === 'dark') {
+        set({ theme: saved });
+      }
+    } catch (err) {
+      console.error('Load theme error:', err);
+    }
+  },
 }));

@@ -1,14 +1,15 @@
-import { Image, StyleSheet, Text, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-
-const APP_LINK = 'https://play.google.com/store/apps/details?id=com.news.brekingapp';
+import { Ionicons } from '@expo/vector-icons';
+import { StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
 
 interface Props {
   imageUri: string;
+  imageHeight?: number;
   title?: string;
   description?: string;
   titleColor?: string;
   publishedDate?: string;
+  reporterName?: string;
 }
 
 const stripText = (value?: string, maxLength = 420) => {
@@ -18,24 +19,35 @@ const stripText = (value?: string, maxLength = 420) => {
 };
 
 const formatShareDate = (value?: string) => {
-  if (!value) return '';
-
-  const date = new Date(value);
+  const date = value ? new Date(value) : new Date();
   if (Number.isNaN(date.getTime())) return '';
 
-  const day = String(date.getDate()).padStart(2, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  
+  const dayName = days[date.getDay()];
+  const day = date.getDate();
+  
+  // Get ordinal suffix (st, nd, rd, th)
+  let suffix = 'th';
+  if (day === 1 || day === 21 || day === 31) suffix = 'st';
+  else if (day === 2 || day === 22) suffix = 'nd';
+  else if (day === 3 || day === 23) suffix = 'rd';
+  
+  const monthName = months[date.getMonth()];
   const year = date.getFullYear();
-
-  return `Dt. ${day}-${month}-${year}`;
+  
+  return `${dayName}, ${day}${suffix} ${monthName} ${year}`;
 };
 
 export default function BrandedShareImage({
   imageUri,
+  imageHeight,
   title,
   description,
   titleColor,
   publishedDate,
+  reporterName,
 }: Props) {
   const finalTitle = stripText(title, 140);
   const finalDescription = stripText(description, 260);
@@ -43,93 +55,75 @@ export default function BrandedShareImage({
 
   return (
     <View style={styles.card} collapsable={false}>
-      <LinearGradient
-        colors={['#EFF6FF', '#FFFFFF', '#FFF7ED', '#E0F2FE']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.background}
-      />
-
-      <View style={styles.circleOne} />
-      <View style={styles.circleTwo} />
-
-      <View style={styles.header}>
-        <View style={styles.logoBox}>
-          <Image
-            source={require('../assets/images/icon.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-
-          <View style={styles.logoTextWrap}>
+      <View style={styles.innerCard}>
+        {/* Card Header */}
+        <View style={styles.cardHeader}>
+          <View style={styles.logoBox}>
+            <Image
+              source={require('../assets/images/icon.png')}
+              style={styles.logo}
+              contentFit="contain"
+            />
             <Text style={styles.logoTitle}>INMinut</Text>
-            {/* <Text style={styles.logoSub}>DIGITAL</Text> */}
+          </View>
+          <Text style={styles.breakingText}>BREAKING NEWS</Text>
+        </View>
+
+        {/* Card Image */}
+        <View style={[styles.imageWrapper, imageHeight ? { height: imageHeight } : null]}>
+          <Image
+            source={
+              imageUri === 'breaking_placeholder'
+                ? require('../assets/images/breaking_placeholder.jpg')
+                : { uri: imageUri }
+            }
+            style={styles.mainImage}
+            contentFit={imageUri === 'breaking_placeholder' ? 'cover' : 'contain'}
+          />
+        </View>
+
+        {/* Control Row */}
+        <View style={styles.controlRow}>
+          <Text style={styles.dateText}>{finalDate}</Text>
+          
+          <View style={styles.iconsRow}>
+            <Ionicons name="heart-outline" size={32} color="#0F172A" />
+            <Ionicons name="bookmark-outline" size={30} color="#0F172A" />
+            <Ionicons name="share-outline" size={30} color="#0F172A" />
+            <View style={styles.whatsappCircle}>
+              <Ionicons name="logo-whatsapp" size={24} color="#FFFFFF" />
+            </View>
           </View>
         </View>
-      </View>
 
- <View style={styles.imageCard}>
-  <Image
-    source={{ uri: imageUri }}
-    style={styles.imageBlurBg}
-    resizeMode="cover"
-    blurRadius={18}
-  />
+        {/* Card Content Area */}
+        <View style={styles.contentArea}>
+          {!!finalTitle && (
+            <Text
+              style={[styles.title, titleColor ? { color: titleColor } : null]}
+              numberOfLines={2}
+            >
+              {finalTitle}
+            </Text>
+          )}
 
-  <View style={styles.imageDarkLayer} />
-
-  <Image
-    source={{ uri: imageUri }}
-    style={styles.mainImage}
-    resizeMode="contain"
-  />
-
-  <View style={styles.cornerLogo}>
-    <Image
-      source={require('../assets/images/icon.png')}
-      style={styles.cornerLogoImage}
-      resizeMode="contain"
-    />
-    <Text style={styles.cornerLogoText}>INMinut</Text>
-  </View>
-</View>
-
-      {!!finalDate && (
-        <View style={styles.dateRow}>
-          <Text style={styles.dateText}>{finalDate}</Text>
+          {!!finalDescription && (
+            <Text
+              style={styles.description}
+              numberOfLines={5}
+              ellipsizeMode="tail"
+            >
+              {finalDescription}
+            </Text>
+          )}
         </View>
-      )}
 
-      <View style={styles.contentArea}>
-        {!!finalTitle && (
-          <Text
-            style={[styles.title, titleColor ? { color: titleColor } : null]}
-            numberOfLines={3}
-            adjustsFontSizeToFit
-            minimumFontScale={0.72}
-          >
-            {finalTitle}
+        {/* Card Footer */}
+        <View style={styles.cardFooter}>
+          <Text style={styles.reporterText}>
+            REPORTER: {reporterName?.trim() || 'INMINUT TEAM'}
           </Text>
-        )}
-
-        {!!finalDescription && (
-          <Text
-            style={styles.description}
-            numberOfLines={5}
-            ellipsizeMode="tail"
-            adjustsFontSizeToFit
-            minimumFontScale={0.78}
-          >
-            {finalDescription}
-          </Text>
-        )}
-      </View>
-
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>Read full news on INMinut App</Text>
-        <Text style={styles.footerLink} numberOfLines={1}>
-          {APP_LINK}
-        </Text>
+        </View>
       </View>
     </View>
   );
@@ -138,214 +132,115 @@ export default function BrandedShareImage({
 const styles = StyleSheet.create({
   card: {
     width: 1080,
-    height: 1350,
+    backgroundColor: '#E2E8F0', // slate outer background
+    paddingHorizontal: 54,
+    paddingVertical: 54,
+  },
+  innerCard: {
+    width: 972,
     backgroundColor: '#FFFFFF',
+    borderRadius: 48,
     overflow: 'hidden',
-  },
-
-  background: {
-    ...StyleSheet.absoluteFillObject,
-  },
-
-  circleOne: {
-    position: 'absolute',
-    width: 420,
-    height: 420,
-    borderRadius: 210,
-    backgroundColor: 'rgba(14,165,233,0.13)',
-    top: -140,
-    right: -120,
-  },
-
-  circleTwo: {
-    position: 'absolute',
-    width: 520,
-    height: 520,
-    borderRadius: 260,
-    backgroundColor: 'rgba(245,158,11,0.13)',
-    bottom: -180,
-    left: -160,
-  },
-
-  header: {
-    paddingTop: 28,
-    paddingHorizontal: 34,
-    paddingBottom: 18,
-  },
-
-  logoBox: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    paddingVertical: 12,
-    paddingLeft: 14,
-    paddingRight: 20,
-    borderWidth: 3,
-    borderColor: '#FACC15',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 18,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.1,
+    shadowRadius: 24,
     elevation: 8,
   },
-
-  logo: {
-    width: 82,
-    height: 82,
-    borderRadius: 16,
-  },
-
-  logoTextWrap: {
-    marginLeft: 12,
-  },
-
-  logoTitle: {
-    color: '#0F172A',
-    fontSize: 32,
-    lineHeight: 38,
-    fontWeight: '900',
-    includeFontPadding: true,
-  },
-
-  logoSub: {
-    alignSelf: 'flex-start',
-    marginTop: 5,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 5,
-    backgroundColor: '#F59E0B',
-    color: '#FFFFFF',
-    fontSize: 17,
-    lineHeight: 23,
-    fontWeight: '900',
-    overflow: 'hidden',
-    includeFontPadding: true,
-  },
-
-imageCard: {
-  marginHorizontal: 32,
-  height: 650,
-  borderRadius: 28,
-  overflow: 'hidden',
-  backgroundColor: '#111827',
-  borderWidth: 2,
-  borderColor: '#FFFFFF',
-  shadowColor: '#0F172A',
-  shadowOffset: { width: 0, height: 16 },
-  shadowOpacity: 0.18,
-  shadowRadius: 26,
-  elevation: 10,
-},
-imageBlurBg: {
-  ...StyleSheet.absoluteFillObject,
-  width: '100%',
-  height: '100%',
-  opacity: 0.55,
-},
-
-imageDarkLayer: {
-  ...StyleSheet.absoluteFillObject,
-  backgroundColor: 'rgba(15,23,42,0.42)',
-},
-mainImage: {
-  width: '100%',
-  height: '100%',
-  backgroundColor: 'transparent',
-},
-
-  cornerLogo: {
-    position: 'absolute',
-    top: 22,
-    right: 22,
+  cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.94)',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+    justifyContent: 'space-between',
+    paddingHorizontal: 48,
+    paddingTop: 36,
+    paddingBottom: 24,
+    backgroundColor: '#FFFFFF',
   },
-
-  cornerLogoImage: {
-    width: 38,
-    height: 38,
-    borderRadius: 8,
+  logoBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
-
-  cornerLogoText: {
-    marginLeft: 7,
+  logo: {
+    width: 48,
+    height: 48,
+    borderRadius: 10,
+  },
+  logoTitle: {
     color: '#0F172A',
-    fontSize: 16,
-    lineHeight: 22,
+    fontSize: 34,
     fontWeight: '900',
-    includeFontPadding: true,
   },
-
-  dateRow: {
-    marginHorizontal: 38,
-    marginTop: 12,
-    alignItems: 'flex-end',
+  breakingText: {
+    color: '#EF4444',
+    fontSize: 26,
+    fontWeight: '900',
+    letterSpacing: 0.8,
   },
-
+  imageWrapper: {
+    width: 972,
+    height: 850,
+    borderBottomLeftRadius: 36,
+    borderBottomRightRadius: 36,
+    overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+  },
+  mainImage: {
+    width: '100%',
+    height: '100%',
+  },
+  controlRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 48,
+    marginTop: 28,
+  },
   dateText: {
     color: '#64748B',
-    fontSize: 20,
-    lineHeight: 28,
-    fontWeight: '900',
-    textAlign: 'right',
-    includeFontPadding: true,
+    fontSize: 22,
+    fontWeight: '600',
   },
-
+  iconsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 20,
+  },
+  whatsappCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#25D366',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   contentArea: {
-    paddingHorizontal: 38,
-    paddingTop: 10,
-    paddingBottom: 132,
+    paddingHorizontal: 48,
+    marginTop: 28,
   },
-
   title: {
     color: '#0F172A',
-    fontSize: 50,
-    lineHeight: 72,
+    fontSize: 48,
+    lineHeight: 68,
     fontWeight: '900',
-    includeFontPadding: true,
+    marginBottom: 16,
   },
-
   description: {
-    marginTop: 14,
     color: '#334155',
-    fontSize: 28,
-    lineHeight: 42,
+    fontSize: 32,
+    lineHeight: 48,
     fontWeight: '700',
-    includeFontPadding: true,
   },
-
-  footer: {
-    position: 'absolute',
-    left: 40,
-    right: 40,
-    bottom: 22,
-    paddingTop: 12,
-    borderTopWidth: 2,
-    borderTopColor: 'rgba(14,165,233,0.22)',
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 48,
+    paddingBottom: 40,
   },
-
-  footerText: {
-    color: '#0F3D8E',
-    fontSize: 23,
-    lineHeight: 30,
-    fontWeight: '900',
-    textAlign: 'center',
-    includeFontPadding: true,
-  },
-
-  footerLink: {
-    marginTop: 4,
-    color: '#F59E0B',
-    fontSize: 17,
-    lineHeight: 24,
-    fontWeight: '900',
-    textAlign: 'center',
-    includeFontPadding: true,
+  reporterText: {
+    color: '#64748B',
+    fontSize: 20,
+    fontWeight: '800',
+    textTransform: 'uppercase',
   },
 });

@@ -5,25 +5,37 @@ import NewsCard from '@/components/NewsCard';
 import { useAppStore } from '@/store';
 import { NewsItem } from '@/api';
 import { AppPalette } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function SavedScreen() {
   const { news, savedNews } = useAppStore();
   const savedNewsItems = news.filter((item) => savedNews.includes(item._id));
 
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
+  const themeStyles = {
+    bg: isDark ? '#0F172A' : '#EFF6FF',
+    card: isDark ? '#1E293B' : '#FFFFFF',
+    text: isDark ? '#F8FAFC' : '#0F172A',
+    border: isDark ? '#334155' : '#BAE6FD',
+    textSecondary: isDark ? '#94A3B8' : '#475569',
+  };
+
   const renderItem = ({ item }: { item: NewsItem }) => <NewsCard item={item} />;
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        <Text style={styles.title}>Saved news</Text>
-        <Text style={styles.subtitle}>Your bookmarked stories are stored here.</Text>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: themeStyles.bg }]}>
+      <View style={[styles.container, { backgroundColor: themeStyles.bg }]}>
+        <Text style={[styles.title, { color: themeStyles.text }]}>Saved news</Text>
+        <Text style={[styles.subtitle, { color: themeStyles.textSecondary }]}>Your bookmarked stories are stored here.</Text>
         {savedNewsItems.length > 0 ? (
           <FlatList data={savedNewsItems} renderItem={renderItem} keyExtractor={(item) => item._id} contentContainerStyle={styles.listContainer} showsVerticalScrollIndicator={false} />
         ) : (
-          <View style={styles.emptyCard}>
+          <View style={[styles.emptyCard, { backgroundColor: themeStyles.card, borderColor: themeStyles.border }]}>
             <Ionicons name="bookmark-outline" size={44} color={AppPalette.brightOrange} />
-            <Text style={styles.emptyTitle}>No saved news yet</Text>
-            <Text style={styles.emptyText}>Tap bookmark on any story to save it for later.</Text>
+            <Text style={[styles.emptyTitle, { color: themeStyles.text }]}>No saved news yet</Text>
+            <Text style={[styles.emptyText, { color: themeStyles.textSecondary }]}>Tap bookmark on any story to save it for later.</Text>
           </View>
         )}
       </View>

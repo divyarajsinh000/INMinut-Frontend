@@ -90,9 +90,8 @@ export default function MediaDisplay({ media }: MediaDisplayProps) {
           return (
             <View key={`video-${item.url}-${index}`} style={styles.mediaBlock}>
               <TouchableOpacity activeOpacity={0.92} onPress={() => setVideoPreviewUrl(url)}>
-                <VideoPlayer url={url} />
+                <VideoPlayer url={url} isPreview={true} />
               </TouchableOpacity>
-              <MediaActions label={getMediaName(item)} onPreview={() => setVideoPreviewUrl(url)} actionLabel="Open in app" icon="play-circle-outline" />
             </View>
           );
         }
@@ -110,7 +109,6 @@ export default function MediaDisplay({ media }: MediaDisplayProps) {
                   {getMediaName(item)}
                 </Text>
               </TouchableOpacity>
-              <MediaActions label="PDF file" onPreview={() => openPdfInApp(item.url)} actionLabel="Open in app" icon="document-text-outline" />
             </View>
           );
         }
@@ -130,36 +128,26 @@ export default function MediaDisplay({ media }: MediaDisplayProps) {
   );
 }
 
-function MediaActions({ label, onPreview, actionLabel = 'Open', icon = 'eye-outline' }: { label: string; onPreview: () => void; actionLabel?: string; icon?: keyof typeof Ionicons.glyphMap }) {
-  return (
-    <View style={styles.actionRow}>
-      <Text style={styles.mediaLabel} numberOfLines={1}>{label}</Text>
-      <TouchableOpacity style={styles.actionButton} onPress={onPreview} activeOpacity={0.8}>
-        <Ionicons name={icon} size={18} color={Colors.white} />
-        <Text style={styles.actionText}>{actionLabel}</Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
 
-function VideoPlayer({ url }: { url: string }) {
+
+function VideoPlayer({ url, isPreview = false }: { url: string; isPreview?: boolean }) {
   const player = useVideoPlayer(url);
   const { status } = useEvent(player, 'statusChange', { status: player.status });
 
   return (
-    <View style={styles.videoContainer}>
+    <View style={styles.videoContainer} pointerEvents={isPreview ? 'none' : 'auto'}>
       <VideoView
         style={styles.video}
         player={player}
-        nativeControls
-        allowsFullscreen
-        allowsPictureInPicture
+        nativeControls={!isPreview}
+        allowsFullscreen={!isPreview}
+        allowsPictureInPicture={!isPreview}
         contentFit="contain"
       />
       {status === 'error' && (
         <View style={styles.videoFallback}>
           <Ionicons name="play-circle-outline" size={34} color={Colors.white} />
-          <Text style={styles.videoFallbackText}>Unable to play preview. Tap Open in app.</Text>
+          <Text style={styles.videoFallbackText}>Unable to play video.</Text>
         </View>
       )}
     </View>

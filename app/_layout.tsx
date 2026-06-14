@@ -9,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAppStore } from '@/store';
 import {
   registerGuestForPushNotifications,
   setupNotificationResponseListener,
@@ -32,8 +33,10 @@ export const unstable_settings = {
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const loadTheme = useAppStore((state) => state.loadTheme);
 
   useEffect(() => {
+    loadTheme();
     registerGuestForPushNotifications();
 
     const notificationResponseSubscription = setupNotificationResponseListener();

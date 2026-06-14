@@ -4,6 +4,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react
 import { ThemedText } from '@/components/themed-text';
 import { City } from '@/api';
 import { AppPalette } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 interface Props {
   visible: boolean;
@@ -24,6 +25,24 @@ const CityPreferenceModal = ({
 }: Props) => {
   const [localSelected, setLocalSelected] = useState<string[]>(selectedCityIds || []);
   const [searchText, setSearchText] = useState('');
+
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
+  const themeStyles = {
+    card: isDark ? '#1E293B' : '#FFFFFF',
+    text: isDark ? '#F8FAFC' : '#0F172A',
+    border: isDark ? '#334155' : '#BAE6FD',
+    textSecondary: isDark ? '#94A3B8' : '#475569',
+    selectedBoxBg: isDark ? '#0F172A' : '#EFF6FF',
+    searchBoxBg: isDark ? '#0F172A' : '#F8FAFC',
+    cityRowBg: isDark ? '#0F172A' : '#F8FAFC',
+    cityRowBorder: isDark ? '#334155' : '#E0F2FE',
+    cityRowSelectedBg: isDark ? '#2D1B00' : '#FFF7ED',
+    checkboxBg: isDark ? '#1E293B' : '#FFFFFF',
+    checkboxBorder: isDark ? '#475569' : '#FDBA74',
+    secondaryBtnBg: isDark ? '#334155' : '#F3F4F6',
+  };
 
   useEffect(() => {
     if (visible) {
@@ -63,46 +82,40 @@ const CityPreferenceModal = ({
   return (
     <Modal visible={visible} animationType="slide" transparent>
       <View style={styles.overlay}>
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, { backgroundColor: themeStyles.card }]}>
           <View style={styles.handle} />
           <View style={styles.headerRow}>
             <View style={styles.iconBadge}>
               <Ionicons name="location-outline" size={24} color="#fff" />
             </View>
             <View style={{ flex: 1 }}>
-              <ThemedText style={styles.title}>Choose your cities</ThemedText>
-              {/* <ThemedText style={styles.subtitle}>
-                Select cities to personalize your feed, or continue with all cities.
-              </ThemedText> */}
+              <ThemedText style={[styles.title, { color: themeStyles.text }]}>Choose your cities</ThemedText>
             </View>
           </View>
 
-          <View style={styles.selectedBox}>
-            <View style={styles.selectedIconWrap}>
+          <View style={[styles.selectedBox, { backgroundColor: themeStyles.selectedBoxBg, borderColor: themeStyles.border }]}>
+            <View style={[styles.selectedIconWrap, { backgroundColor: themeStyles.card, borderColor: themeStyles.border }]}>
               <Ionicons name="business-outline" size={18} color={AppPalette.brightOrange} />
             </View>
             <View style={{ flex: 1 }}>
-              <ThemedText style={styles.selectedLabel}>
+              <ThemedText style={[styles.selectedLabel, { color: themeStyles.text }]}>
                 {localSelected.length === 0 ? 'Showing news from every city' : `${localSelected.length} ${localSelected.length === 1 ? 'city' : 'cities'} selected`}
               </ThemedText>
-              {/* <ThemedText style={styles.selectedHint}>
-                {localSelected.length === 0 ? 'Tap city names below to filter your feed.' : 'Tap selected city again to remove it.'}
-              </ThemedText> */}
             </View>
           </View>
 
-          <View style={styles.searchBox}>
-            <Ionicons name="search-outline" size={18} color={AppPalette.muted} />
+          <View style={[styles.searchBox, { backgroundColor: themeStyles.searchBoxBg, borderColor: themeStyles.border }]}>
+            <Ionicons name="search-outline" size={18} color={themeStyles.textSecondary} />
             <TextInput
               value={searchText}
               onChangeText={setSearchText}
               placeholder="Search city or state"
-              placeholderTextColor={AppPalette.muted}
-              style={styles.searchInput}
+              placeholderTextColor={themeStyles.textSecondary}
+              style={[styles.searchInput, { color: themeStyles.text }]}
             />
             {!!searchText && (
               <Pressable onPress={() => setSearchText('')} hitSlop={8}>
-                <Ionicons name="close-circle" size={18} color={AppPalette.muted} />
+                <Ionicons name="close-circle" size={18} color={themeStyles.textSecondary} />
               </Pressable>
             )}
           </View>
@@ -110,9 +123,13 @@ const CityPreferenceModal = ({
           <ScrollView style={styles.cityList} contentContainerStyle={styles.cityListContent} showsVerticalScrollIndicator={false}>
             <Pressable
               onPress={() => setLocalSelected([])}
-              style={[styles.cityRow, localSelected.length === 0 && styles.cityRowSelected]}
+              style={[
+                styles.cityRow,
+                { backgroundColor: themeStyles.cityRowBg, borderColor: themeStyles.cityRowBorder },
+                localSelected.length === 0 && [styles.cityRowSelected, { backgroundColor: themeStyles.cityRowSelectedBg }]
+              ]}
             >
-              <View style={[styles.checkbox, localSelected.length === 0 && styles.checkboxSelected]}>
+              <View style={[styles.checkbox, { backgroundColor: themeStyles.checkboxBg, borderColor: themeStyles.checkboxBorder }, localSelected.length === 0 && styles.checkboxSelected]}>
                 <Ionicons
                   name={localSelected.length === 0 ? 'checkmark' : 'globe-outline'}
                   size={15}
@@ -120,8 +137,7 @@ const CityPreferenceModal = ({
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <ThemedText style={styles.cityName}>All cities</ThemedText>
-                {/* <ThemedText style={styles.cityState}>Show news from every available city</ThemedText> */}
+                <ThemedText style={[styles.cityName, { color: themeStyles.text }]}>All cities</ThemedText>
               </View>
             </Pressable>
 
@@ -131,9 +147,13 @@ const CityPreferenceModal = ({
                 <Pressable
                   key={city._id}
                   onPress={() => toggleCity(city._id)}
-                  style={[styles.cityRow, selected && styles.cityRowSelected]}
+                  style={[
+                    styles.cityRow,
+                    { backgroundColor: themeStyles.cityRowBg, borderColor: themeStyles.cityRowBorder },
+                    selected && [styles.cityRowSelected, { backgroundColor: themeStyles.cityRowSelectedBg }]
+                  ]}
                 >
-                  <View style={[styles.checkbox, selected && styles.checkboxSelected]}>
+                  <View style={[styles.checkbox, { backgroundColor: themeStyles.checkboxBg, borderColor: themeStyles.checkboxBorder }, selected && styles.checkboxSelected]}>
                     <Ionicons
                       name={selected ? 'checkmark' : 'ellipse-outline'}
                       size={15}
@@ -141,10 +161,11 @@ const CityPreferenceModal = ({
                     />
                   </View>
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <ThemedText style={styles.cityName} numberOfLines={1}>{city.name}  {!!city.state?.name && (
-                      <ThemedText style={styles.cityState} numberOfLines={1}>{city.state.name}</ThemedText>
-                    )}</ThemedText>
-                   
+                    <ThemedText style={[styles.cityName, { color: themeStyles.text }]} numberOfLines={1}>
+                      {city.name}  {!!city.state?.name && (
+                        <ThemedText style={[styles.cityState, { color: themeStyles.textSecondary }]} numberOfLines={1}>{city.state.name}</ThemedText>
+                      )}
+                    </ThemedText>
                   </View>
                 </Pressable>
               );
@@ -152,16 +173,16 @@ const CityPreferenceModal = ({
           </ScrollView>
 
           {cities.length === 0 && (
-            <ThemedText style={styles.emptyText}>No cities available. Add cities from admin panel first.</ThemedText>
+            <ThemedText style={[styles.emptyText, { color: themeStyles.textSecondary }]}>No cities available. Add cities from admin panel first.</ThemedText>
           )}
 
           {cities.length > 0 && groupedCities.length === 0 && (
-            <ThemedText style={styles.emptyText}>No city found for this search.</ThemedText>
+            <ThemedText style={[styles.emptyText, { color: themeStyles.textSecondary }]}>No city found for this search.</ThemedText>
           )}
 
           <View style={styles.actions}>
-            <Pressable style={[styles.button, styles.secondaryButton]} onPress={required ? handleShowAllCities : onClose}>
-              <ThemedText style={styles.secondaryButtonText}>{required ? 'Skip / Show All' : 'Cancel'}</ThemedText>
+            <Pressable style={[styles.button, styles.secondaryButton, { backgroundColor: themeStyles.secondaryBtnBg }]} onPress={required ? handleShowAllCities : onClose}>
+              <ThemedText style={[styles.secondaryButtonText, { color: themeStyles.text }]}>{required ? 'Skip / Show All' : 'Cancel'}</ThemedText>
             </Pressable>
             <Pressable
               style={[styles.button, styles.primaryButton]}

@@ -4,12 +4,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NewsCard from '@/components/NewsCard';
 import AdCard from '@/components/AdCard';
+import EmbedCard from '@/components/EmbedCard';
 import CategoryFilter from '@/components/CategoryFilter';
 import CityPreferenceModal from '@/components/CityPreferenceModal';
 import OnboardingSlider, { hasCompletedOnboarding } from '@/components/OnboardingSlider';
 import AppGuideOverlay, { hasCompletedAppGuide } from '@/components/AppGuideOverlay';
 import { useAppStore } from '@/store';
-import { Ad, NewsItem } from '@/api';
+import { Ad, NewsItem, EmbedItem } from '@/api';
 import { AppPalette } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -17,7 +18,8 @@ const CITY_PREFERENCE_SETUP_KEY = 'city_preference_setup_done';
 
 type FeedItem =
   | { type: 'news'; data: NewsItem }
-  | { type: 'ad'; data: Ad; key: string };
+  | { type: 'ad'; data: Ad; key: string }
+  | { type: 'embed'; data: EmbedItem; key: string };
 
 const hasRenderableNews = (item: NewsItem) => {
   if (item.isActive === false) return false;
@@ -31,12 +33,14 @@ export default function HomeScreen() {
     news,
     categories,
     advertisements,
+    embeds,
     cities,
     selectedCityPreferences,
     selectedCategory,
     fetchNews,
     fetchCategories,
     fetchAdvertisements,
+    fetchEmbeds,
     fetchCities,
     loadCityPreferences,
     saveCityPreferences,
@@ -45,12 +49,29 @@ export default function HomeScreen() {
     setSelectedCategory,
     isLoading,
     error,
+    theme,
   } = useAppStore();
+
+  const isDark = theme === 'dark';
+  const themeStyles = {
+    bg: isDark ? '#0F172A' : '#EFF6FF',
+    card: isDark ? '#1E293B' : '#FFFFFF',
+    text: isDark ? '#F8FAFC' : '#0F172A',
+    border: isDark ? '#334155' : '#BAE6FD',
+    textSecondary: isDark ? '#94A3B8' : '#475569',
+    helpIcon: isDark ? '#38BDF8' : AppPalette.deepBlue,
+  };
 
   const [showCityModal, setShowCityModal] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showAppGuide, setShowAppGuide] = useState(false);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
+  
+  const [guideLayouts, setGuideLayouts] = useState<Record<string, any>>({});
+  const cityButtonRef = useRef<View>(null);
+  const helpButtonRef = useRef<View>(null);
+  const categoryRowRef = useRef<View>(null);
+
   const viewedNewsIdsRef = useRef<Set<string>>(new Set());
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: Array<{ item: FeedItem; isViewable: boolean }> }) => {
@@ -71,7 +92,7 @@ export default function HomeScreen() {
       hasCompletedAppGuide(),
     ]);
 
-    await Promise.all([fetchCategories(), fetchAdvertisements(), fetchCities(), loadSavedNews()]);
+    await Promise.all([fetchCategories(), fetchAdvertisements(), fetchEmbeds(), fetchCities(), loadSavedNews()]);
 
     if (!onboardingDone) {
       setShowOnboarding(true);
@@ -100,13 +121,52 @@ export default function HomeScreen() {
     });
   }, [selectedCategory, selectedCityPreferences, preferencesLoaded, fetchNews]);
 
+  useEffect(() => {
+    if (showAppGuide) {
+      const timer = setTimeout(() => {
+        cityButtonRef.current?.measureInWindow((x, y, width, height) => {
+          if (width > 0) setGuideLayouts(prev => ({ ...prev, cityButton: { x, y, width, height } }));
+        });
+        helpButtonRef.current?.measureInWindow((x, y, width, height) => {
+          if (width > 0) setGuideLayouts(prev => ({ ...prev, helpButton: { x, y, width, height } }));
+        });
+        categoryRowRef.current?.measureInWindow((x, y, width, height) => {
+          if (width > 0) setGuideLayouts(prev => ({ ...prev, categoryRow: { x, y, width, height } }));
+        });
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [showAppGuide]);
+
   const feedItems: FeedItem[] = [];
+  
+  // 1. Inject ads/embeds that should appear before any news items (position === 0)
+  advertisements.forEach((ad) => {
+    const position = ad.positionAfterNews !== undefined ? Number(ad.positionAfterNews) : 4;
+    if (ad.isEnabled && position === 0) {
+      feedItems.push({ type: 'ad', data: ad, key: `${ad._id}-top` });
+    }
+  });
+  embeds.forEach((emb) => {
+    const position = emb.positionAfterNews !== undefined ? Number(emb.positionAfterNews) : 5;
+    if (emb.isEnabled && position === 0) {
+      feedItems.push({ type: 'embed', data: emb, key: `${emb._id}-top` });
+    }
+  });
+
+  // 2. Iterate news items and inject subsequent ads/embeds (position > 0)
   news.filter(hasRenderableNews).forEach((item, index) => {
     feedItems.push({ type: 'news', data: item });
     advertisements.forEach((ad) => {
-      const position = Number(ad.positionAfterNews || 4);
-      if (ad.isEnabled && index + 1 === position) {
+      const position = ad.positionAfterNews !== undefined ? Number(ad.positionAfterNews) : 4;
+      if (ad.isEnabled && position > 0 && index + 1 === position) {
         feedItems.push({ type: 'ad', data: ad, key: `${ad._id}-${index}` });
+      }
+    });
+    embeds.forEach((emb) => {
+      const position = emb.positionAfterNews !== undefined ? Number(emb.positionAfterNews) : 5;
+      if (emb.isEnabled && position > 0 && index + 1 === position) {
+        feedItems.push({ type: 'embed', data: emb, key: `${emb._id}-${index}` });
       }
     });
   });
@@ -116,18 +176,25 @@ export default function HomeScreen() {
     ? 'All cities'
     : `${selectedCityCount} ${selectedCityCount === 1 ? 'city' : 'cities'}`;
 
-  const renderItem = ({ item }: { item: FeedItem }) => {
+  const renderItem = ({ item, index }: { item: FeedItem; index: number }) => {
     if (item.type === 'ad') return <AdCard item={item.data} />;
-    return <NewsCard item={item.data} />;
+    if (item.type === 'embed') return <EmbedCard item={item.data} />;
+    return (
+      <NewsCard
+        item={item.data}
+        onMediaLayout={index === 0 ? (layout) => setGuideLayouts(prev => ({ ...prev, newsMedia: layout })) : undefined}
+        onActionsLayout={index === 0 ? (layout) => setGuideLayouts(prev => ({ ...prev, saveShare: layout })) : undefined}
+      />
+    );
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        <View style={styles.hero}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: themeStyles.bg }]}>
+      <View style={[styles.container, { backgroundColor: themeStyles.bg }]}>
+        <View style={[styles.hero, { backgroundColor: themeStyles.bg }]}>
           <View style={styles.heroTopRow}>
             <View style={styles.logoBox}>
-              <View style={styles.logoImageWrap}>
+              <View style={[styles.logoImageWrap, isDark && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
                 <Image
                   source={require('../../assets/images/icon.png')}
                   style={styles.logo}
@@ -136,31 +203,31 @@ export default function HomeScreen() {
               </View>
 
               <View style={styles.logoTextWrap}>
-                <Text style={styles.logoTitle} numberOfLines={1}>INMinut</Text>
+                <Text style={[styles.logoTitle, { color: themeStyles.text }]} numberOfLines={1}>INMinut</Text>
                 {/* <Text style={styles.logoSub} numberOfLines={1}>Latest local news</Text> */}
               </View>
             </View>
 
             <View style={styles.headerActions}>
-              <Pressable style={styles.helpButton} onPress={() => setShowAppGuide(true)} hitSlop={8}>
-                <Ionicons name="help-circle-outline" size={22} color={AppPalette.deepBlue} />
+              <Pressable ref={helpButtonRef} style={[styles.helpButton, { backgroundColor: themeStyles.card, borderColor: themeStyles.border }]} onPress={() => setShowAppGuide(true)} hitSlop={8}>
+                <Ionicons name="help-circle-outline" size={22} color={themeStyles.helpIcon} />
               </Pressable>
 
-              <Pressable style={styles.cityButton} onPress={() => setShowCityModal(true)}>
+              <Pressable ref={cityButtonRef} style={[styles.cityButton, { backgroundColor: themeStyles.card, borderColor: themeStyles.border }]} onPress={() => setShowCityModal(true)}>
                 <Ionicons name="location-outline" size={17} color={AppPalette.brightOrange} />
-                <Text style={styles.cityButtonText} numberOfLines={1}>{selectedCityLabel}</Text>
-                <Ionicons name="chevron-down" size={15} color={AppPalette.muted} />
+                <Text style={[styles.cityButtonText, { color: themeStyles.text }]} numberOfLines={1}>{selectedCityLabel}</Text>
+                <Ionicons name="chevron-down" size={15} color={themeStyles.textSecondary} />
               </Pressable>
             </View>
           </View>
         </View>
 
-        <View style={styles.filterWrapper}>
+        <View ref={categoryRowRef} style={styles.filterWrapper}>
           <CategoryFilter categories={categories} selectedCategoryId={selectedCategory} onSelectCategory={setSelectedCategory} />
         </View>
 
         {isLoading && news.length === 0 ? (
-          <Text style={styles.stateText}>Loading fresh stories...</Text>
+          <Text style={[styles.stateText, { color: themeStyles.textSecondary }]}>Loading fresh stories...</Text>
         ) : error ? (
           <Text style={styles.errorText}>{error}</Text>
         ) : (
@@ -213,7 +280,7 @@ export default function HomeScreen() {
           }}
         />
 
-        <AppGuideOverlay visible={showAppGuide} onFinish={() => setShowAppGuide(false)} />
+        <AppGuideOverlay visible={showAppGuide} onFinish={() => setShowAppGuide(false)} layouts={guideLayouts} />
       </View>
     </SafeAreaView>
   );
@@ -225,7 +292,7 @@ const styles = StyleSheet.create({
   hero: {
     paddingHorizontal: 16,
     paddingTop: 8,
-    paddingBottom: 12,
+    paddingBottom: 0,
     backgroundColor: '#EFF6FF',
   },
   heroTopRow: {
@@ -340,7 +407,7 @@ const styles = StyleSheet.create({
     color: AppPalette.ink,
     letterSpacing: -0.6,
   },
-  filterWrapper: { height: 64 },
+  filterWrapper: { height: 42 },
   listContainer: { padding: 16, paddingTop: 6, paddingBottom: 26 },
   stateText: { textAlign: 'center', marginTop: 50, color: AppPalette.slate, fontWeight: '800' },
   errorText: { textAlign: 'center', marginTop: 50, color: AppPalette.danger, fontWeight: '800' },

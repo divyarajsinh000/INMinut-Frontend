@@ -16,20 +16,23 @@ export interface City {
 
 export interface NewsItem {
   _id: string;
-  title: string;
-  description: string;
-  content: string;
-  category: { _id: string; name: string; backgroundColor?: string; textColor?: string };
+  title?: string;
+  description?: string;
+  content?: string;
+  category?: { _id: string; name: string; backgroundColor?: string; textColor?: string };
   cities?: City[];
-  hashtags: string[];
-  publishedDate: string;
-  media: MediaItem[];
-  reporter: { name: string; avatar: string };
-  isBreaking: boolean;
+  hashtags?: string[];
+  publishedDate?: string;
+  media?: MediaItem[];
+  reporter?: { name?: string; avatar?: string };
+  isBreaking?: boolean;
   breakingText?: string;
   titleColor?: string;
   titleFontSize?: number | string;
   descriptionFontSize?: number | string;
+  breakingBgColor?: string;
+  breakingTextColor?: string;
+  isBreakingBlink?: boolean;
   isActive?: boolean;
   isPinned?: boolean;
   pinOrder?: number;
@@ -47,6 +50,19 @@ export interface Ad {
   redirectUrl: string;
   positionAfterNews: number;
   isEnabled: boolean;
+  viewCount?: number;
+  clickCount?: number;
+}
+
+export interface EmbedItem {
+  _id: string;
+  title: string;
+  embedCode: string;
+  height: number;
+  positionAfterNews: number;
+  isEnabled: boolean;
+  viewCount?: number;
+  clickCount?: number;
 }
 
 export interface RegisterGuestPayload {
@@ -96,6 +112,13 @@ export const api = {
     return response.data.data as Ad[];
   },
 
+  getEmbeds: async () => {
+    const response = await apiClient.get('/api/embeds', {
+      params: { enabledOnly: true },
+    });
+    return response.data.data as EmbedItem[];
+  },
+
   getCategories: async () => {
     const response = await apiClient.get('/api/categories');
     return response.data.data as Category[];
@@ -143,6 +166,32 @@ registerGuestUser: async (payload: RegisterGuestPayload) => {
       viewCount: number;
       saveCount: number;
       shareCount: number;
+    };
+  },
+
+  trackAdInteraction: async (
+    adId: string,
+    action: 'view' | 'click'
+  ) => {
+    const response = await apiClient.post(`/api/advertisements/${adId}/track`, { action });
+    return response.data.data as {
+      advertisementId: string;
+      action: 'view' | 'click';
+      viewCount: number;
+      clickCount: number;
+    };
+  },
+
+  trackEmbedInteraction: async (
+    embedId: string,
+    action: 'view' | 'click'
+  ) => {
+    const response = await apiClient.post(`/api/embeds/${embedId}/track`, { action });
+    return response.data.data as {
+      embedId: string;
+      action: 'view' | 'click';
+      viewCount: number;
+      clickCount: number;
     };
   },
 };

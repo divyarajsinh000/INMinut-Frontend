@@ -51,6 +51,10 @@ const mimeFromMedia = (item: MediaItem, ext: string) => {
 const normalizeMedia = (media?: MediaItem[], type?: MediaItem['type']) =>
   (media || []).filter((item) => !!item?.url && (!type || item.type === type));
 
+const stripHtml = (html: string) => {
+  return html.replace(/<[^>]*>?/gm, '');
+};
+
 export const buildNewsPlainText = (payload: Partial<ShareNewsPayload>) => {
   const cityLine = payload.cities?.length
     ? `Cities: ${payload.cities.map((city) => city.name).join(', ')}`
@@ -59,7 +63,7 @@ export const buildNewsPlainText = (payload: Partial<ShareNewsPayload>) => {
 
   return [
     payload.title?.trim(),
-    payload.description?.trim(),
+    payload.description ? stripHtml(payload.description).trim() : undefined,
     payload.content?.trim(),
     cityLine,
     hashtagLine,
@@ -183,7 +187,7 @@ const buildNewsPdfHtml = (payload: ShareNewsPayload) => {
         <div class="header">
           <div class="brand">Breking App News</div>
           <h1>${escapeHtml(payload.title)}</h1>
-          ${payload.description ? `<div class="description">${escapeHtml(payload.description)}</div>` : ''}
+          ${payload.description ? `<div class="description">${payload.description}</div>` : ''}
           <div class="meta">
             <strong>Cities:</strong> ${escapeHtml(cityText)}${hashtagText ? `<br/><strong>Hashtags:</strong> ${escapeHtml(hashtagText)}` : ''}
           </div>
@@ -250,9 +254,9 @@ export const shareBrandedImageFile = async (imageUri: string, title = 'Share new
   }
 
   await Sharing.shareAsync(imageUri, {
-    mimeType: 'image/png',
+    mimeType: 'image/jpeg',
     dialogTitle: title,
-    UTI: 'public.png',
+    UTI: 'public.jpeg',
   });
   return true;
 };

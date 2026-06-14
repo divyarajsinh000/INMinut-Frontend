@@ -9,6 +9,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { AppPalette } from '@/constants/theme';
 
@@ -36,6 +37,7 @@ interface GuideStep {
 interface AppGuideOverlayProps {
   visible: boolean;
   onFinish: () => void;
+  layouts?: Record<string, { x: number; y: number; width: number; height: number }>;
 }
 
 const guideSteps: GuideStep[] = [
@@ -97,7 +99,7 @@ export const hasCompletedAppGuide = async () => {
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
-const AppGuideOverlay = ({ visible, onFinish }: AppGuideOverlayProps) => {
+const AppGuideOverlay = ({ visible, onFinish, layouts = {} }: AppGuideOverlayProps) => {
   const [stepIndex, setStepIndex] = useState(0);
   const { width, height } = useWindowDimensions();
 
@@ -121,11 +123,13 @@ const AppGuideOverlay = ({ visible, onFinish }: AppGuideOverlayProps) => {
     setStepIndex((prev) => prev + 1);
   };
 
+  const insets = useSafeAreaInsets();
+
   const layout = useMemo(() => {
     const cardWidth = Math.min(width - 24, 340);
     const screenPad = 12;
-    const topSafe = 42;
-    const bottomSafe = 96;
+    const topSafe = insets.top + 40;
+    const bottomSafe = Math.max(96, insets.bottom + 60);
     const maxTooltipTop = Math.max(topSafe, height - bottomSafe - 235);
 
     const getLeft = (targetLeft: number, targetWidth: number) => {
@@ -145,13 +149,37 @@ const AppGuideOverlay = ({ visible, onFinish }: AppGuideOverlayProps) => {
       width: cardWidth,
     });
 
+    // Check dynamic layouts first
+    const measured = layouts[step.placement];
+    if (measured) {
+      const targetWidth = measured.width;
+      const targetHeight = measured.height;
+      const targetTop = measured.y;
+      const targetLeft = measured.x;
+      const borderRadius = step.placement === 'cityButton' || step.placement === 'helpButton' ? targetHeight / 2 : 16;
+      return {
+        targetStyle: {
+          top: targetTop,
+          left: targetLeft,
+          width: targetWidth,
+          height: targetHeight,
+          borderRadius: borderRadius,
+        },
+        handStyle: step.placement === 'bottomTabs'
+          ? { bottom: targetHeight + 5, left: width / 2 - 27 }
+          : { top: targetTop + targetHeight - 5, left: targetLeft + targetWidth / 2 - 20 },
+        tooltipStyle: targetTop + targetHeight + 245 < height
+          ? tooltipBelow(targetTop, targetLeft, targetWidth, targetHeight)
+          : tooltipAbove(targetTop, targetLeft, targetWidth),
+      };
+    }
+
     switch (step.placement) {
       case 'cityButton': {
-        const targetWidth = Math.min(132, width * 0.36);
+        const targetWidth = Math.min(118, width * 0.36);
         const targetHeight = 42;
-        const targetTop = 58;
-        const targetRight = 12;
-        const targetLeft = width - targetRight - targetWidth;
+        const targetTop = insets.top + 8;
+        const targetLeft = width - 16 - targetWidth;
         return {
           targetStyle: {
             top: targetTop,
@@ -165,31 +193,31 @@ const AppGuideOverlay = ({ visible, onFinish }: AppGuideOverlayProps) => {
         };
       }
       case 'helpButton': {
-        const targetWidth = 46;
-        const targetHeight = 46;
-        const targetTop = 56;
-        const targetLeft = clamp(width - Math.min(196, width * 0.52), 16, width - targetWidth - 16);
+        const targetWidth = 42;
+        const targetHeight = 42;
+        const targetTop = insets.top + 8;
+        const targetLeft = width - 66 - Math.min(118, width * 0.36);
         return {
-          targetStyle: { top: targetTop, left: targetLeft, width: targetWidth, height: targetHeight, borderRadius: 23 },
+          targetStyle: { top: targetTop, left: targetLeft, width: targetWidth, height: targetHeight, borderRadius: 21 },
           handStyle: { top: targetTop + targetHeight - 5, left: targetLeft + 8 },
           tooltipStyle: tooltipBelow(targetTop, targetLeft, targetWidth, targetHeight),
         };
       }
       case 'categoryRow': {
-        const targetTop = 128;
-        const targetLeft = 10;
-        const targetWidth = width - 20;
-        const targetHeight = 62;
+        const targetTop = insets.top + 54;
+        const targetLeft = 0;
+        const targetWidth = width;
+        const targetHeight = 40;
         return {
-          targetStyle: { top: targetTop, left: targetLeft, width: targetWidth, height: targetHeight, borderRadius: 20 },
+          targetStyle: { top: targetTop, left: targetLeft, width: targetWidth, height: targetHeight, borderRadius: 0 },
           handStyle: { top: targetTop + targetHeight - 10, left: 44 },
           tooltipStyle: tooltipBelow(targetTop, targetLeft, targetWidth, targetHeight),
         };
       }
       case 'newsMedia': {
-        const targetTop = 220;
-        const targetLeft = 12;
-        const targetWidth = width - 24;
+        const targetTop = insets.top + 102;
+        const targetLeft = 16;
+        const targetWidth = width - 32;
         const targetHeight = Math.min(215, height * 0.29);
         return {
           targetStyle: { top: targetTop, left: targetLeft, width: targetWidth, height: targetHeight, borderRadius: 24 },
@@ -200,21 +228,20 @@ const AppGuideOverlay = ({ visible, onFinish }: AppGuideOverlayProps) => {
         };
       }
       case 'saveShare': {
-        const targetWidth = 112;
-        const targetHeight = 50;
-        const targetTop = 310;
-        const targetRight = 14;
-        const targetLeft = width - targetRight - targetWidth;
+        const targetWidth = 90;
+        const targetHeight = 46;
+        const targetTop = insets.top + 340;
+        const targetLeft = width - 32 - targetWidth;
         return {
-          targetStyle: { top: targetTop, left: targetLeft, width: targetWidth, height: targetHeight, borderRadius: 23 },
+          targetStyle: { top: targetTop, left: targetLeft, width: targetWidth, height: targetHeight, borderRadius: 14 },
           handStyle: { top: targetTop + targetHeight - 8, left: targetLeft + targetWidth - 48 },
           tooltipStyle: tooltipAbove(targetTop, targetLeft, targetWidth),
         };
       }
       case 'pullRefresh': {
-        const targetTop = 198;
-        const targetLeft = 14;
-        const targetWidth = width - 28;
+        const targetTop = insets.top + 102;
+        const targetLeft = 16;
+        const targetWidth = width - 32;
         const targetHeight = Math.min(315, height * 0.42);
         return {
           targetStyle: { top: targetTop, left: targetLeft, width: targetWidth, height: targetHeight, borderRadius: 26 },
@@ -227,7 +254,7 @@ const AppGuideOverlay = ({ visible, onFinish }: AppGuideOverlayProps) => {
         const targetHeight = 74;
         const targetLeft = 10;
         const targetWidth = width - 20;
-        const targetBottom = 8;
+        const targetBottom = insets.bottom + 8;
         const targetTop = height - targetBottom - targetHeight;
         return {
           targetStyle: { bottom: targetBottom, left: targetLeft, width: targetWidth, height: targetHeight, borderRadius: 28 },
@@ -236,7 +263,7 @@ const AppGuideOverlay = ({ visible, onFinish }: AppGuideOverlayProps) => {
         };
       }
     }
-  }, [height, step.placement, width]);
+  }, [height, step.placement, width, insets, layouts]);
 
   const progressText = `${stepIndex + 1} / ${guideSteps.length}`;
 

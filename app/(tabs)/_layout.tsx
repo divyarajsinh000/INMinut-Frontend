@@ -7,14 +7,14 @@ import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-  const active = Colors[colorScheme ?? 'light'].tint;
+  const colorScheme = useColorScheme() ?? 'light';
+  const active = Colors[colorScheme].tint;
 
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: active,
-        tabBarInactiveTintColor: '#98A2B3',
+        tabBarInactiveTintColor: colorScheme === 'dark' ? '#64748B' : '#98A2B3',
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarStyle: {
@@ -22,9 +22,9 @@ export default function TabLayout() {
           paddingTop: 8,
           paddingBottom: Platform.OS === 'ios' ? 24 : 10,
           borderTopWidth: 0,
-          backgroundColor: '#FFFFFF',
+          backgroundColor: colorScheme === 'dark' ? '#0F172A' : '#FFFFFF',
           elevation: 10,
-          shadowColor: '#0F3D8E',
+          shadowColor: colorScheme === 'dark' ? '#000000' : '#0F3D8E',
           shadowOpacity: 0.12,
           shadowRadius: 18,
           shadowOffset: { width: 0, height: -6 },
