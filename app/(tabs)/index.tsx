@@ -236,6 +236,8 @@ export default function HomeScreen() {
             renderItem={renderItem}
             keyExtractor={(item) => item.type === 'news' ? item.data._id : item.key}
             contentContainerStyle={styles.listContainer}
+            style={styles.newsList}
+            scrollIndicatorInsets={{ bottom: 96 }}
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={<Text style={styles.stateText}>No news found for selected filters.</Text>}
             onViewableItemsChanged={onViewableItemsChanged}
@@ -408,7 +410,8 @@ const styles = StyleSheet.create({
     letterSpacing: -0.6,
   },
   filterWrapper: { height: 42 },
-  listContainer: { padding: 16, paddingTop: 6, paddingBottom: 26 },
+  newsList: { flex: 1 },
+  listContainer: { padding: 16, paddingTop: 6, paddingBottom: 120 },
   stateText: { textAlign: 'center', marginTop: 50, color: AppPalette.slate, fontWeight: '800' },
   errorText: { textAlign: 'center', marginTop: 50, color: AppPalette.danger, fontWeight: '800' },
 });

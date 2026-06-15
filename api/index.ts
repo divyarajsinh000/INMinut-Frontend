@@ -17,6 +17,8 @@ export interface City {
 export interface NewsItem {
   _id: string;
   title?: string;
+  titleLink?: string;
+  title_link?: string;
   description?: string;
   content?: string;
   category?: { _id: string; name: string; backgroundColor?: string; textColor?: string };

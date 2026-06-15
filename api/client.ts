@@ -3,7 +3,7 @@ import axios from 'axios';
 export const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL ||
   process.env.EXPO_PUBLIC_API_BASE_URL ||
-  'http://10.172.177.14:5000';
+  'http://192.168.1.46:5000';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,

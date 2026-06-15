@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, Platform, ScrollView, NativeSyntheticEvent, NativeScrollEvent, Dimensions, Pressable, Alert, ActivityIndicator, InteractionManager, Animated, Image as RNImage } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, ScrollView, NativeSyntheticEvent, NativeScrollEvent, Dimensions, Pressable, Alert, ActivityIndicator, Animated, Linking } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useRef, useState, useEffect } from 'react';
@@ -35,6 +35,14 @@ const normalizeHexColor = (value: unknown, fallback: string) => {
   if (typeof value !== 'string') return fallback;
   const color = value.trim();
   return /^#([0-9A-F]{3}|[0-9A-F]{6}|[0-9A-F]{8})$/i.test(color) ? color : fallback;
+};
+
+const normalizeExternalUrl = (value: unknown) => {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  if (/^(https?:\/\/|mailto:|tel:)/i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
 };
 
 export default function NewsCard({ item, onMediaLayout, onActionsLayout }: NewsCardProps) {
@@ -128,6 +136,23 @@ export default function NewsCard({ item, onMediaLayout, onActionsLayout }: NewsC
   const breakingLabel = item.breakingText?.trim() || 'Breaking';
   const hasOnlyMedia = !item.title?.trim() && !plainDescription.trim();
   const hashtags = item.hashtags || [];
+  const titleLink = normalizeExternalUrl(item.titleLink || item.title_link);
+
+  const handleOpenTitleLink = async () => {
+    if (!titleLink) return;
+
+    try {
+      const supported = await Linking.canOpenURL(titleLink);
+      if (!supported) {
+        Alert.alert('Unable to open link', 'This news title link is not supported on this device.');
+        return;
+      }
+      await Linking.openURL(titleLink);
+    } catch (error) {
+      console.error('Open title link failed:', error);
+      Alert.alert('Unable to open link', 'Please try again later.');
+    }
+  };
 
   const displayText = (() => {
     if (descriptionExpanded || renderedLines.length <= 5) {
@@ -291,24 +316,32 @@ export default function NewsCard({ item, onMediaLayout, onActionsLayout }: NewsC
       ) : null}
 
       <View style={styles.content}>
-        <View style={styles.categoryRow}>
-          <View style={[styles.categoryBadge, { backgroundColor: item.category?.backgroundColor || Colors.brightOrange }]}> 
-            <Text style={[styles.categoryText, { color: item.category?.textColor || Colors.white }]}> 
-              {item.category?.name || 'News'}
-            </Text>
+        <View style={styles.metaHeader}>
+          <View style={styles.categoryCityWrap}>
+            <View style={[styles.categoryBadge, { backgroundColor: item.category?.backgroundColor || Colors.brightOrange }]}>
+              <Text style={[styles.categoryText, { color: item.category?.textColor || Colors.white }]}>
+                {item.category?.name || 'News'}
+              </Text>
+            </View>
+
+            {!!item.cities?.length && (
+              <View style={styles.cityChipsWrap}>
+                {(item.cities || []).map((city) => (
+                  <View key={city._id || city.name} style={[styles.cityChip, isDark && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>
+                    <Ionicons name="location-outline" size={12} color={AppPalette.brightOrange} />
+                    <Text style={[styles.cityChipText, isDark && { color: '#CBD5E1' }]}>{city.name}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
-           {!!item.cities?.length ? (
-        <View style={styles.dateRow}>
-             <Ionicons name="location-outline" size={14} color={AppPalette.brightOrange} />
-             <Text style={[styles.date, isDark && { color: '#CBD5E1' }]} numberOfLines={1}>{(item.cities || []).map((city) => city.name).join(', ')}</Text>
-           </View>
-        ) : null
-         
-        }
-          <View style={styles.dateRow}>
-            <Ionicons name="calendar-outline" size={13} color={isDark ? '#94A3B8' : AppPalette.muted} />
-            <Text style={[styles.date, isDark && { color: '#94A3B8' }]}>{item.publishedDate ? formatDate(item.publishedDate) : ''}</Text>
-          </View>
+
+          {!!item.publishedDate && (
+            <View style={styles.dateRow}>
+              <Ionicons name="calendar-outline" size={13} color={isDark ? '#94A3B8' : AppPalette.muted} />
+              <Text style={[styles.date, isDark && { color: '#94A3B8' }]}>{formatDate(item.publishedDate)}</Text>
+            </View>
+          )}
         </View>
 
         {item.isBreaking && images.length === 0 && (
@@ -318,7 +351,18 @@ export default function NewsCard({ item, onMediaLayout, onActionsLayout }: NewsC
           </Animated.View>
         )}
 
-        {!!item.title && <Text style={[styles.title, { color: titleColor, fontSize: titleFontSize, lineHeight: Math.round(titleFontSize * 1.28) }]}>{item.title}</Text>}
+        {!!item.title && (
+          titleLink ? (
+            <Pressable onPress={handleOpenTitleLink} style={styles.titleLinkButton} hitSlop={6}>
+              <Text style={[styles.title, styles.clickableTitle, { color: titleColor, fontSize: titleFontSize, lineHeight: Math.round(titleFontSize * 1.28) }]}>
+                {item.title}
+                <Text style={styles.titleLinkIcon}> ↗</Text>
+              </Text>
+            </Pressable>
+          ) : (
+            <Text style={[styles.title, { color: titleColor, fontSize: titleFontSize, lineHeight: Math.round(titleFontSize * 1.28) }]}>{item.title}</Text>
+          )
+        )}
 {!!item.description && (
   <View style={styles.descriptionWrap}>
     {descriptionExpanded ? (
@@ -489,12 +533,68 @@ const styles = StyleSheet.create({
   mediaBadge: { position: 'absolute', right: 12, bottom: 12, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: 'rgba(15,61,142,0.82)' },
   mediaBadgeText: { color: '#fff', fontSize: 11, fontWeight: '900', textTransform: 'uppercase' },
   content: { padding: 16 },
-  categoryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 10 },
-  categoryBadge: { paddingHorizontal: 11, paddingVertical: 5, borderRadius: 999 },
+  metaHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+    gap: 8,
+  },
+  categoryCityWrap: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 7,
+    paddingRight: 4,
+  },
+  categoryBadge: {
+    flexShrink: 0,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    borderRadius: 999,
+  },
   categoryText: { fontSize: 11, fontWeight: '900', textTransform: 'uppercase' },
-  dateRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  cityChipsWrap: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 6,
+  },
+  cityChip: {
+    maxWidth: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: AppPalette.blueSurface,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  cityChipText: {
+    flexShrink: 1,
+    color: AppPalette.deepBlue,
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '800',
+  },
+  dateRow: {
+    flexShrink: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingTop: 4,
+  },
   date: { fontSize: 12, color: AppPalette.muted, fontWeight: '700' },
+  titleLinkButton: { alignSelf: 'stretch' },
   title: { fontSize: 20, lineHeight: 26, fontWeight: '900', color: AppPalette.ink, marginBottom: 8 },
+  clickableTitle: { textDecorationLine: 'underline' },
+  titleLinkIcon: { color: AppPalette.brightOrange, fontWeight: '900' },
 description: {
   fontSize: 14,
   lineHeight: 21,
