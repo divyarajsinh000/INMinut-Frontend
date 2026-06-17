@@ -327,7 +327,7 @@ export default function NewsCard({ item, onMediaLayout, onActionsLayout }: NewsC
             {!!item.cities?.length && (
               <View style={styles.cityChipsWrap}>
                 {(item.cities || []).map((city) => (
-                  <View key={city._id || city.name} style={[styles.cityChip, isDark && { backgroundColor: '#0F172A', borderColor: '#334155' }]}>
+                  <View key={city._id || city.name} style={[styles.cityChip, isDark && { backgroundColor: '#111111', borderColor: '#334155' }]}>
                     <Ionicons name="location-outline" size={12} color={AppPalette.brightOrange} />
                     <Text style={[styles.cityChipText, isDark && { color: '#CBD5E1' }]}>{city.name}</Text>
                   </View>
@@ -461,7 +461,7 @@ export default function NewsCard({ item, onMediaLayout, onActionsLayout }: NewsC
               }
               title={item.title}
               description={plainDescription}
-              titleColor={item.titleColor || '#0F172A'}
+              titleColor={item.titleColor || '#111111'}
               publishedDate={item.publishedDate}
               reporterName={item.reporter?.name}
             />

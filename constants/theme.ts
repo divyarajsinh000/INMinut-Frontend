@@ -1,11 +1,11 @@
 import { Platform } from 'react-native';
 
-const skyBlue = '#0EA5E9';
-const deepBlue = '#0F3D8E';
-const navyBlue = '#0B1E3F';
-const lightBlue = '#E0F2FE';
-const softBg = '#EFF6FF';
-const ink = '#0F172A';
+const skyBlue = '#FF3131';
+const deepBlue = '#B91C1C';
+const navyBlue = '#0B0B0D';
+const lightBlue = '#FEE2E2';
+const softBg = '#FFF5F5';
+const ink = '#111111';
 const slate = '#475569';
 const card = '#FFFFFF';
 const white = '#FFFFFF';
@@ -13,7 +13,7 @@ const white = '#FFFFFF';
 export const AppPalette = {
   brightOrange: skyBlue,
   deepOrange: deepBlue,
-  yellowishOrange: '#38BDF8',
+  yellowishOrange: '#FF6B6B',
   skyBlue,
   deepBlue,
   navyBlue,
@@ -23,14 +23,14 @@ export const AppPalette = {
   card,
   success: '#16A34A',
   danger: '#EF4444',
-  border: '#BAE6FD',
+  border: '#FECACA',
   muted: '#64748B',
   blueSurface: lightBlue,
 };
 
 export const Colors = {
   brightOrange: skyBlue,
-  yellowishOrange: '#38BDF8',
+  yellowishOrange: '#FF6B6B',
   skyBlue,
   deepBlue,
   darkCharcoal: navyBlue,
@@ -46,10 +46,10 @@ export const Colors = {
   dark: {
     text: white,
     background: navyBlue,
-    tint: '#38BDF8',
+    tint: '#FF6B6B',
     icon: white,
     tabIconDefault: '#94A3B8',
-    tabIconSelected: '#38BDF8',
+    tabIconSelected: '#FF6B6B',
   },
 };
 

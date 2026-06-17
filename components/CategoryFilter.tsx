@@ -19,8 +19,8 @@ export default function CategoryFilter({
 
   const themeStyles = {
     card: isDark ? '#1C2541' : '#FFFFFF',
-    text: isDark ? '#F8FAFC' : '#0F172A',
-    border: isDark ? '#3A506B' : '#BAE6FD',
+    text: isDark ? '#F8FAFC' : '#111111',
+    border: isDark ? '#7F1D1D' : '#FECACA',
   };
 
   return (

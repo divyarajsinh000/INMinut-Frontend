@@ -61,8 +61,8 @@ export default function ContactScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#EFF6FF' },
-  container: { flex: 1, padding: 18, backgroundColor: '#EFF6FF' },
+  safeArea: { flex: 1, backgroundColor: '#FFF5F5' },
+  container: { flex: 1, padding: 18, backgroundColor: '#FFF5F5' },
   headerCard: {
     backgroundColor: AppPalette.deepBlue,
     borderRadius: 30,
@@ -91,7 +91,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  iconBox: { width: 48, height: 48, borderRadius: 17, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' },
+  iconBox: { width: 48, height: 48, borderRadius: 17, backgroundColor: '#FFF5F5', alignItems: 'center', justifyContent: 'center' },
   textWrap: { flex: 1 },
   label: { color: AppPalette.ink, fontSize: 16, fontWeight: '900' },
   value: { color: AppPalette.slate, fontSize: 13, fontWeight: '700', marginTop: 4 },

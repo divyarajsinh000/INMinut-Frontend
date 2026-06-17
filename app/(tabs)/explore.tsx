@@ -16,10 +16,10 @@ export default function SearchScreen() {
   const isDark = colorScheme === 'dark';
 
   const themeStyles = {
-    bg: isDark ? '#0F172A' : '#EFF6FF',
+    bg: isDark ? '#111111' : '#FFF5F5',
     card: isDark ? '#1E293B' : '#FFFFFF',
-    text: isDark ? '#F8FAFC' : '#0F172A',
-    border: isDark ? '#334155' : '#BAE6FD',
+    text: isDark ? '#F8FAFC' : '#111111',
+    border: isDark ? '#334155' : '#FECACA',
     textSecondary: isDark ? '#94A3B8' : '#475569',
   };
 
@@ -68,8 +68,8 @@ export default function SearchScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#EFF6FF' },
-  container: { flex: 1, backgroundColor: '#EFF6FF', paddingTop: 12 },
+  safeArea: { flex: 1, backgroundColor: '#FFF5F5' },
+  container: { flex: 1, backgroundColor: '#FFF5F5', paddingTop: 12 },
   title: { fontSize: 28, fontWeight: '900', color: AppPalette.ink, paddingHorizontal: 18 },
   subtitle: { fontSize: 14, color: AppPalette.slate, fontWeight: '600', paddingHorizontal: 18, marginTop: 5 },
   searchContainer: {

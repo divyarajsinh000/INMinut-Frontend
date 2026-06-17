@@ -20,7 +20,7 @@ const generateHtml = (embedCode: string, isDark: boolean) => `
         margin: 0;
         padding: 8px;
         background-color: ${isDark ? '#1E293B' : '#FFFFFF'};
-        color: ${isDark ? '#F8FAFC' : '#0F172A'};
+        color: ${isDark ? '#F8FAFC' : '#111111'};
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       }
       .embed-container {
@@ -105,7 +105,7 @@ export default function EmbedCard({ item }: EmbedCardProps) {
         style={{
           marginBottom: 16,
           borderRadius: 16,
-          border: isDark ? '1px solid #334155' : '1px solid #BAE6FD',
+          border: isDark ? '1px solid #334155' : '1px solid #FECACA',
           backgroundColor: isDark ? '#1E293B' : '#FFFFFF',
           padding: 8,
           height,
@@ -156,11 +156,11 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#BAE6FD',
+    borderColor: '#FECACA',
     backgroundColor: '#FFFFFF',
     overflow: 'hidden',
     // Premium soft card shadow
-    shadowColor: '#0F172A',
+    shadowColor: '#111111',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
     shadowRadius: 10,

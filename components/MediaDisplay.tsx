@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     gap: 12,
     borderWidth: 1,
-    borderColor: '#BAE6FD',
+    borderColor: '#FECACA',
   },
   pdfText: {
     flex: 1,

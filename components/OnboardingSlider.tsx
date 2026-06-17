@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
 import { Dimensions, FlatList, Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Image } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThemedText } from '@/components/themed-text';
 import { AppPalette } from '@/constants/theme';
@@ -68,9 +69,12 @@ const OnboardingSlider = ({ visible, onDone }: Props) => {
 
         <View style={styles.header}>
           <View style={styles.logoBadge}>
-            <Ionicons name="newspaper-outline" size={24} color="#fff" />
+            <Image
+              source={require('../assets/images/logo-light.png')}
+              style={styles.logoImage}
+              contentFit="contain"
+            />
           </View>
-          <ThemedText style={styles.brand}>BrekingApp</ThemedText>
           <Pressable onPress={complete} hitSlop={12}>
             <ThemedText style={styles.skip}>Skip</ThemedText>
           </Pressable>
@@ -127,7 +131,7 @@ const OnboardingSlider = ({ visible, onDone }: Props) => {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#FFF5F5',
     overflow: 'hidden',
   },
   bgCircleOne: {
@@ -137,7 +141,7 @@ const styles = StyleSheet.create({
     width: 230,
     height: 230,
     borderRadius: 115,
-    backgroundColor: '#BAE6FD',
+    backgroundColor: '#FECACA',
     opacity: 0.8,
   },
   bgCircleTwo: {
@@ -157,12 +161,15 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   logoBadge: {
-    width: 44,
-    height: 44,
+    flex: 1,
+    height: 46,
     borderRadius: 16,
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'center',
-    backgroundColor: AppPalette.brightOrange,
+  },
+  logoImage: {
+    width: 150,
+    height: 42,
   },
   brand: {
     flex: 1,
@@ -189,7 +196,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 34,
-    shadowColor: '#0EA5E9',
+    shadowColor: '#FF3131',
     shadowOffset: { width: 0, height: 18 },
     shadowOpacity: 0.2,
     shadowRadius: 30,
@@ -199,11 +206,11 @@ const styles = StyleSheet.create({
     width: 150,
     height: 150,
     borderRadius: 75,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#FFF5F5',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#BAE6FD',
+    borderColor: '#FECACA',
   },
   title: {
     textAlign: 'center',
@@ -250,7 +257,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    shadowColor: '#0EA5E9',
+    shadowColor: '#FF3131',
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.28,
     shadowRadius: 18,

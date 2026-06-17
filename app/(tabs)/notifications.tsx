@@ -33,12 +33,12 @@ export default function NotificationsScreen() {
   const isDark = theme === 'dark';
 
   const themeStyles = {
-    bg: isDark ? '#0F172A' : '#EFF6FF',
+    bg: isDark ? '#111111' : '#FFF5F5',
     card: isDark ? '#1E293B' : '#FFFFFF',
-    text: isDark ? '#F8FAFC' : '#0F172A',
-    border: isDark ? '#334155' : '#BAE6FD',
+    text: isDark ? '#F8FAFC' : '#111111',
+    border: isDark ? '#334155' : '#FECACA',
     textSecondary: isDark ? '#94A3B8' : '#475569',
-    iconBg: isDark ? '#334155' : '#EFF6FF',
+    iconBg: isDark ? '#334155' : '#FFF5F5',
   };
 
   const selectedCityNames = cities
@@ -118,8 +118,8 @@ export default function NotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#EFF6FF' },
-  container: { flex: 1, backgroundColor: '#EFF6FF', padding: 18, paddingTop: 12 },
+  safeArea: { flex: 1, backgroundColor: '#FFF5F5' },
+  container: { flex: 1, backgroundColor: '#FFF5F5', padding: 18, paddingTop: 12 },
   title: { fontSize: 28, fontWeight: '900', color: AppPalette.ink },
   subtitle: { fontSize: 14, color: AppPalette.slate, fontWeight: '600', marginTop: 5, marginBottom: 18 },
   sectionTitle: { color: AppPalette.ink, fontSize: 16, fontWeight: '900', marginTop: 6, marginBottom: 10 },
@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  settingIcon: { width: 44, height: 44, borderRadius: 16, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' },
+  settingIcon: { width: 44, height: 44, borderRadius: 16, backgroundColor: '#FFF5F5', alignItems: 'center', justifyContent: 'center' },
   settingTextWrap: { flex: 1 },
   settingTitle: { color: AppPalette.ink, fontWeight: '900', fontSize: 16 },
   settingSub: { color: AppPalette.slate, fontWeight: '600', fontSize: 13, marginTop: 3 },

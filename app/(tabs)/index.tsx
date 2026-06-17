@@ -54,12 +54,12 @@ export default function HomeScreen() {
 
   const isDark = theme === 'dark';
   const themeStyles = {
-    bg: isDark ? '#0F172A' : '#EFF6FF',
+    bg: isDark ? '#111111' : '#FFF5F5',
     card: isDark ? '#1E293B' : '#FFFFFF',
-    text: isDark ? '#F8FAFC' : '#0F172A',
-    border: isDark ? '#334155' : '#BAE6FD',
+    text: isDark ? '#F8FAFC' : '#111111',
+    border: isDark ? '#334155' : '#FECACA',
     textSecondary: isDark ? '#94A3B8' : '#475569',
-    helpIcon: isDark ? '#38BDF8' : AppPalette.deepBlue,
+    helpIcon: isDark ? '#FF6B6B' : AppPalette.deepBlue,
   };
 
   const [showCityModal, setShowCityModal] = useState(false);
@@ -109,6 +109,7 @@ export default function HomeScreen() {
     setPreferencesLoaded(true);
   }, [fetchCategories, fetchAdvertisements, fetchCities, fetchNews, selectedCategory, loadCityPreferences, loadSavedNews]);
 
+  
   useEffect(() => {
     loadData();
   }, [loadData]);
@@ -121,22 +122,31 @@ export default function HomeScreen() {
     });
   }, [selectedCategory, selectedCityPreferences, preferencesLoaded, fetchNews]);
 
+  const measureGuideTargets = useCallback(() => {
+    cityButtonRef.current?.measureInWindow((x, y, width, height) => {
+      if (width > 0 && height > 0) {
+        setGuideLayouts(prev => ({ ...prev, cityButton: { x, y, width, height } }));
+      }
+    });
+    helpButtonRef.current?.measureInWindow((x, y, width, height) => {
+      if (width > 0 && height > 0) {
+        setGuideLayouts(prev => ({ ...prev, helpButton: { x, y, width, height } }));
+      }
+    });
+    categoryRowRef.current?.measureInWindow((x, y, width, height) => {
+      if (width > 0 && height > 0) {
+        setGuideLayouts(prev => ({ ...prev, categoryRow: { x, y, width, height } }));
+      }
+    });
+  }, []);
+
   useEffect(() => {
-    if (showAppGuide) {
-      const timer = setTimeout(() => {
-        cityButtonRef.current?.measureInWindow((x, y, width, height) => {
-          if (width > 0) setGuideLayouts(prev => ({ ...prev, cityButton: { x, y, width, height } }));
-        });
-        helpButtonRef.current?.measureInWindow((x, y, width, height) => {
-          if (width > 0) setGuideLayouts(prev => ({ ...prev, helpButton: { x, y, width, height } }));
-        });
-        categoryRowRef.current?.measureInWindow((x, y, width, height) => {
-          if (width > 0) setGuideLayouts(prev => ({ ...prev, categoryRow: { x, y, width, height } }));
-        });
-      }, 300);
-      return () => clearTimeout(timer);
-    }
-  }, [showAppGuide]);
+    if (!showAppGuide) return;
+
+    setGuideLayouts({});
+    const timers = [250, 650, 1100].map((delay) => setTimeout(measureGuideTargets, delay));
+    return () => timers.forEach(clearTimeout);
+  }, [showAppGuide, measureGuideTargets, news.length, categories.length]);
 
   const feedItems: FeedItem[] = [];
   
@@ -194,17 +204,12 @@ export default function HomeScreen() {
         <View style={[styles.hero, { backgroundColor: themeStyles.bg }]}>
           <View style={styles.heroTopRow}>
             <View style={styles.logoBox}>
-              <View style={[styles.logoImageWrap, isDark && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
+              <View style={[styles.logoImageWrap, isDark && { backgroundColor: '#020617', borderColor: '#334155' }]}>
                 <Image
-                  source={require('../../assets/images/icon.png')}
+                  source={isDark ? require('../../assets/images/logo-dark.png') : require('../../assets/images/logo-light.png')}
                   style={styles.logo}
                   resizeMode="contain"
                 />
-              </View>
-
-              <View style={styles.logoTextWrap}>
-                <Text style={[styles.logoTitle, { color: themeStyles.text }]} numberOfLines={1}>INMinut</Text>
-                {/* <Text style={styles.logoSub} numberOfLines={1}>Latest local news</Text> */}
               </View>
             </View>
 
@@ -289,13 +294,13 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#EFF6FF' },
-  container: { flex: 1, backgroundColor: '#EFF6FF' },
+  safeArea: { flex: 1, backgroundColor: '#FFF5F5' },
+  container: { flex: 1, backgroundColor: '#FFF5F5' },
   hero: {
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 0,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#FFF5F5',
   },
   heroTopRow: {
     flexDirection: 'row',
@@ -316,7 +321,7 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#BAE6FD',
+    borderColor: '#FECACA',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -331,8 +336,8 @@ const styles = StyleSheet.create({
     paddingLeft: 8,
     paddingRight: 12,
     // borderWidth: 1,
-    // borderColor: '#BAE6FD',
-    // shadowColor: '#0F172A',
+    // borderColor: '#FECACA',
+    // shadowColor: '#111111',
     // shadowOffset: { width: 0, height: 5 },
     // shadowOpacity: 0.08,
     // shadowRadius: 12,
@@ -340,20 +345,21 @@ const styles = StyleSheet.create({
   },
 
   logoImageWrap: {
-    width: 46,
+    width: 142,
     height: 46,
-    borderRadius: 14,
-    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E0F2FE',
+    borderColor: '#FEE2E2',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+    paddingHorizontal: 8,
   },
 
   logo: {
-    width: 40,
-    height: 40,
+    width: 126,
+    height: 34,
   },
 
   logoTextWrap: {
@@ -363,7 +369,7 @@ const styles = StyleSheet.create({
   },
 
   logoTitle: {
-    color: '#0F172A',
+    color: '#111111',
     fontSize: 22,
     lineHeight: 27,
     fontWeight: '900',
@@ -385,7 +391,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#BAE6FD',
+    borderColor: '#FECACA',
     flexShrink: 1,
     flexDirection: 'row',
     alignItems: 'center',

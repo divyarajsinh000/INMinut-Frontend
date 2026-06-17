@@ -60,11 +60,10 @@ export default function BrandedShareImage({
         <View style={styles.cardHeader}>
           <View style={styles.logoBox}>
             <Image
-              source={require('../assets/images/icon.png')}
+              source={require('../assets/images/logo-light.png')}
               style={styles.logo}
               contentFit="contain"
             />
-            <Text style={styles.logoTitle}>INMinut</Text>
           </View>
           <Text style={styles.breakingText}>BREAKING NEWS</Text>
         </View>
@@ -87,9 +86,9 @@ export default function BrandedShareImage({
           <Text style={styles.dateText}>{finalDate}</Text>
           
           <View style={styles.iconsRow}>
-            <Ionicons name="heart-outline" size={32} color="#0F172A" />
-            <Ionicons name="bookmark-outline" size={30} color="#0F172A" />
-            <Ionicons name="share-outline" size={30} color="#0F172A" />
+            <Ionicons name="heart-outline" size={32} color="#111111" />
+            <Ionicons name="bookmark-outline" size={30} color="#111111" />
+            <Ionicons name="share-outline" size={30} color="#111111" />
             <View style={styles.whatsappCircle}>
               <Ionicons name="logo-whatsapp" size={24} color="#FFFFFF" />
             </View>
@@ -161,19 +160,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  logo: {
-    width: 48,
-    height: 48,
-    borderRadius: 10,
-  },
+logo: {
+  width: 300,
+  height: 99,
+  borderRadius: 14,
+  resizeMode: "contain",
+},
   logoTitle: {
-    color: '#0F172A',
+    color: '#111111',
     fontSize: 34,
     fontWeight: '900',
   },
   breakingText: {
     color: '#EF4444',
-    fontSize: 26,
+    fontSize: 45,
     fontWeight: '900',
     letterSpacing: 0.8,
   },
@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
     marginTop: 28,
   },
   title: {
-    color: '#0F172A',
+    color: '#111111',
     fontSize: 48,
     lineHeight: 68,
     fontWeight: '900',
