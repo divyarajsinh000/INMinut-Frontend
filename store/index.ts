@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { NewsItem, Category, City, Ad, EmbedItem, api } from '@/api';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { getOrCreateGuestId } from '@/utils/notifications';
-
+import { logger } from '@/utils/logger';
 const SAVED_NEWS_KEY = 'saved_news';
 const CITY_PREFERENCES_KEY = 'city_preferences';
 
@@ -109,7 +109,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   loadCityPreferences: async () => {
     try {
-      const saved = await AsyncStorage.getItem(CITY_PREFERENCES_KEY);
+      const saved = await SecureStore.getItemAsync(CITY_PREFERENCES_KEY);
       const cityIds = saved ? JSON.parse(saved) : [];
       const normalized = Array.isArray(cityIds) ? cityIds : [];
       set({ selectedCityPreferences: normalized });
@@ -123,13 +123,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   saveCityPreferences: async (cityIds) => {
     const uniqueCityIds = [...new Set(cityIds.filter(Boolean))];
     set({ selectedCityPreferences: uniqueCityIds });
-    await AsyncStorage.setItem(CITY_PREFERENCES_KEY, JSON.stringify(uniqueCityIds));
+    await SecureStore.setItemAsync(CITY_PREFERENCES_KEY, JSON.stringify(uniqueCityIds));
 
     try {
       const guestId = await getOrCreateGuestId();
       await api.updateGuestCityPreferences(guestId, uniqueCityIds);
     } catch (err) {
-      console.log('Guest city preference sync skipped until guest registration exists:', err);
+      logger('Guest city preference sync skipped until guest registration exists:', err);
     }
 
     await get().fetchNews({
@@ -141,7 +141,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   loadSavedNews: async () => {
     try {
-      const saved = await AsyncStorage.getItem(SAVED_NEWS_KEY);
+      const saved = await SecureStore.getItemAsync(SAVED_NEWS_KEY);
       if (saved) {
         set({ savedNews: JSON.parse(saved) });
       }
@@ -159,7 +159,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ savedNews: newSavedNews });
 
     try {
-      await AsyncStorage.setItem(SAVED_NEWS_KEY, JSON.stringify(newSavedNews));
+      await SecureStore.setItemAsync(SAVED_NEWS_KEY, JSON.stringify(newSavedNews));
     } catch (err) {
       console.error('Save news error:', err);
     }
@@ -179,7 +179,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         ),
       });
     } catch (err) {
-      console.log('News save tracking skipped:', err);
+      logger('News save tracking skipped:', err);
     }
   },
 
@@ -201,7 +201,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         });
       }
     } catch (err) {
-      console.log('News view tracking skipped:', err);
+      logger('News view tracking skipped:', err);
     }
   },
 
@@ -221,7 +221,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         ),
       });
     } catch (err) {
-      console.log('News share tracking skipped:', err);
+      logger('News share tracking skipped:', err);
     }
   },
 
@@ -236,7 +236,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         ),
       });
     } catch (err) {
-      console.log('Ad interaction tracking skipped:', err);
+      logger('Ad interaction tracking skipped:', err);
     }
   },
 
@@ -251,7 +251,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         ),
       });
     } catch (err) {
-      console.log('Embed interaction tracking skipped:', err);
+      logger('Embed interaction tracking skipped:', err);
     }
   },
 
@@ -265,12 +265,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setTheme: async (theme) => {
     set({ theme });
-    await AsyncStorage.setItem('theme_preference', theme);
+    await SecureStore.setItemAsync('theme_preference', theme);
   },
 
   loadTheme: async () => {
     try {
-      const saved = await AsyncStorage.getItem('theme_preference');
+      const saved = await SecureStore.getItemAsync('theme_preference');
       if (saved === 'light' || saved === 'dark') {
         set({ theme: saved });
       }

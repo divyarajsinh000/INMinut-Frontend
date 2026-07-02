@@ -19,6 +19,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
+       "enableProguardInReleaseBuilds": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.news.brekingapp",
       "googleServicesFile": "./google-services.json"
@@ -42,7 +43,8 @@
           }
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,

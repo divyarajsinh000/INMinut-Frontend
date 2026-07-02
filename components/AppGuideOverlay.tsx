@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Modal,
@@ -93,7 +93,7 @@ const guideSteps: GuideStep[] = [
 ];
 
 export const hasCompletedAppGuide = async () => {
-  const value = await AsyncStorage.getItem(APP_GUIDE_DONE_KEY);
+  const value = await SecureStore.getItemAsync(APP_GUIDE_DONE_KEY);
   return value === 'true';
 };
 
@@ -111,7 +111,7 @@ const AppGuideOverlay = ({ visible, onFinish, layouts = {} }: AppGuideOverlayPro
   }, [visible]);
 
   const complete = async () => {
-    await AsyncStorage.setItem(APP_GUIDE_DONE_KEY, 'true');
+    await SecureStore.setItemAsync(APP_GUIDE_DONE_KEY, 'true');
     onFinish();
   };
 

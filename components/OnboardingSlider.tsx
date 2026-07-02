@@ -2,10 +2,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
 import { Dimensions, FlatList, Modal, Pressable, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import { ThemedText } from '@/components/themed-text';
 import { AppPalette } from '@/constants/theme';
-
+import * as SecureStore from 'expo-secure-store';
 export const ONBOARDING_DONE_KEY = 'brekingapp_onboarding_done_v1';
 
 interface Props {
@@ -34,7 +34,7 @@ const slides = [
 ];
 
 export const hasCompletedOnboarding = async () => {
-  const value = await AsyncStorage.getItem(ONBOARDING_DONE_KEY);
+  const value = await SecureStore.getItemAsync(ONBOARDING_DONE_KEY);
   return value === 'true';
 };
 
@@ -47,7 +47,7 @@ const OnboardingSlider = ({ visible, onDone }: Props) => {
   }, [visible]);
 
   const complete = async () => {
-    await AsyncStorage.setItem(ONBOARDING_DONE_KEY, 'true');
+    await SecureStore.setItemAsync(ONBOARDING_DONE_KEY, 'true');
     onDone();
   };
 

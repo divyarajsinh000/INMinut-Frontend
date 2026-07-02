@@ -1,7 +1,7 @@
 import { View, FlatList, StyleSheet, RefreshControl, Text, Pressable, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import NewsCard from '@/components/NewsCard';
 import AdCard from '@/components/AdCard';
 import EmbedCard from '@/components/EmbedCard';
@@ -13,6 +13,7 @@ import { useAppStore } from '@/store';
 import { Ad, NewsItem, EmbedItem } from '@/api';
 import { AppPalette } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
+import * as SecureStore from 'expo-secure-store';
 
 const CITY_PREFERENCE_SETUP_KEY = 'city_preference_setup_done';
 
@@ -88,7 +89,7 @@ export default function HomeScreen() {
     const [savedCityIds, onboardingDone, cityPreferenceSetupDone, appGuideDone] = await Promise.all([
       loadCityPreferences(),
       hasCompletedOnboarding(),
-      AsyncStorage.getItem(CITY_PREFERENCE_SETUP_KEY),
+      SecureStore.getItemAsync(CITY_PREFERENCE_SETUP_KEY),
       hasCompletedAppGuide(),
     ]);
 
@@ -255,7 +256,7 @@ export default function HomeScreen() {
           visible={showOnboarding}
           onDone={() => {
             setShowOnboarding(false);
-            AsyncStorage.getItem(CITY_PREFERENCE_SETUP_KEY).then((done) => {
+            SecureStore.getItemAsync(CITY_PREFERENCE_SETUP_KEY).then((done) => {
               if (!done) {
                 setShowCityModal(true);
               } else {
@@ -273,13 +274,13 @@ export default function HomeScreen() {
           selectedCityIds={selectedCityPreferences}
           required={false}
           onClose={async () => {
-            await AsyncStorage.setItem(CITY_PREFERENCE_SETUP_KEY, 'true');
+            await SecureStore.setItemAsync(CITY_PREFERENCE_SETUP_KEY, 'true');
             setShowCityModal(false);
             const guideDone = await hasCompletedAppGuide();
             if (!guideDone) setShowAppGuide(true);
           }}
           onSave={async (cityIds) => {
-            await AsyncStorage.setItem(CITY_PREFERENCE_SETUP_KEY, 'true');
+            await SecureStore.setItemAsync(CITY_PREFERENCE_SETUP_KEY, 'true');
             await saveCityPreferences(cityIds);
             setShowCityModal(false);
             const guideDone = await hasCompletedAppGuide();

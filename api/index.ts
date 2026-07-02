@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import apiClient from './client';
 
 export interface MediaItem {
@@ -132,11 +133,11 @@ export const api = {
   },
 
 registerGuestUser: async (payload: RegisterGuestPayload) => {
-  console.log('API registerGuestUser payload:', payload);
+  logger('API registerGuestUser payload:', payload);
 
   const response = await apiClient.post('/api/guest-users/register', payload);
 
-  console.log('API registerGuestUser response:', response.data);
+  logger('API registerGuestUser response:', response.data);
 
   return response.data.data;
 },

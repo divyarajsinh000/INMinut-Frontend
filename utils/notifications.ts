@@ -1,11 +1,11 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-
+import { logger } from '@/utils/logger';
 import { api } from '@/api';
-
+import uuid from 'react-native-uuid';
 const NOTIFICATIONS_ENABLED_KEY = 'notifications_enabled';
 const GUEST_ID_KEY = 'guest_id';
 const DEVICE_ID_KEY = 'device_id';
@@ -21,37 +21,37 @@ Notifications.setNotificationHandler({
 });
 
 const createDeviceId = () => {
-  return `device_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
+  return uuid.v4();
 };
 
 export const getOrCreateDeviceId = async () => {
-  const existingDeviceId = await AsyncStorage.getItem(DEVICE_ID_KEY);
+  const existingDeviceId = await SecureStore.getItemAsync(DEVICE_ID_KEY);
 
   if (existingDeviceId) {
     return existingDeviceId;
   }
 
   const newDeviceId = createDeviceId();
-  await AsyncStorage.setItem(DEVICE_ID_KEY, newDeviceId);
+  await SecureStore.setItemAsync(DEVICE_ID_KEY, newDeviceId);
   return newDeviceId;
 };
 
 export const getOrCreateGuestId = async () => {
   const deviceId = await getOrCreateDeviceId();
   const expectedGuestId = `guest_${deviceId}`;
-  const existingGuestId = await AsyncStorage.getItem(GUEST_ID_KEY);
+  const existingGuestId = await SecureStore.getItemAsync(GUEST_ID_KEY);
 
   // Force device based guestId so every physical phone has a separate identity.
   // Old random guest ids can make tracking/registration confusing across clears.
   if (existingGuestId !== expectedGuestId) {
-    await AsyncStorage.setItem(GUEST_ID_KEY, expectedGuestId);
+    await SecureStore.setItemAsync(GUEST_ID_KEY, expectedGuestId);
   }
 
   return expectedGuestId;
 };
 
 export const getNotificationsEnabled = async () => {
-  const value = await AsyncStorage.getItem(NOTIFICATIONS_ENABLED_KEY);
+  const value = await SecureStore.getItemAsync(NOTIFICATIONS_ENABLED_KEY);
 
   if (value === null) {
     return true;
@@ -63,9 +63,16 @@ export const getNotificationsEnabled = async () => {
 export const setupNotificationResponseListener = () => {
   const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
     const data = response.notification.request.content.data;
-    console.log('Notification clicked:', data);
+    logger('Notification clicked:', data);
   });
-
+Notifications.addNotificationReceivedListener(
+  (notification) => {
+    console.log(
+      'Notification Received:',
+      JSON.stringify(notification, null, 2)
+    );
+  }
+);
   return subscription;
 };
 
@@ -90,7 +97,7 @@ export const setupAndroidNotificationChannel = async () => {
 };
 
 export const saveNotificationsEnabled = async (enabled: boolean) => {
-  await AsyncStorage.setItem(NOTIFICATIONS_ENABLED_KEY, String(enabled));
+  await SecureStore.setItemAsync(NOTIFICATIONS_ENABLED_KEY, String(enabled));
 
   const guestId = await getOrCreateGuestId();
   const deviceId = await getOrCreateDeviceId();
@@ -98,7 +105,7 @@ export const saveNotificationsEnabled = async (enabled: boolean) => {
   try {
     await api.updateGuestNotificationPreference(guestId, enabled, deviceId);
   } catch (error: any) {
-    console.log('updateGuestNotificationPreference error:', {
+    logger('updateGuestNotificationPreference error:', {
       guestId,
       deviceId,
       enabled,
@@ -117,7 +124,7 @@ export const registerGuestForPushNotifications = async () => {
     const guestId = await getOrCreateGuestId();
 
     if (!Device.isDevice) {
-      console.log('Push notifications need a physical device.');
+      logger('Push notifications need a physical device.');
       return null;
     }
 
@@ -130,13 +137,13 @@ export const registerGuestForPushNotifications = async () => {
     }
 
     if (finalStatus !== 'granted') {
-      console.log('Notification permission not granted.');
-      await AsyncStorage.setItem(NOTIFICATIONS_ENABLED_KEY, 'false');
+      logger('Notification permission not granted.');
+      await SecureStore.setItemAsync(NOTIFICATIONS_ENABLED_KEY, 'false');
 
       try {
         await api.updateGuestNotificationPreference(guestId, false, deviceId);
       } catch (error: any) {
-        console.log('permission denied preference update skipped:', {
+        logger('permission denied preference update skipped:', {
           guestId,
           deviceId,
           status: error?.response?.status,
@@ -150,18 +157,18 @@ export const registerGuestForPushNotifications = async () => {
     const projectId = Constants.easConfig?.projectId || Constants.expoConfig?.extra?.eas?.projectId;
 
     if (!projectId) {
-      console.log('Missing EAS projectId. Run eas init first.');
+      logger('Missing EAS projectId. Run eas init first.');
       return null;
     }
 
     const tokenResponse = await Notifications.getExpoPushTokenAsync({ projectId });
     const expoPushToken = tokenResponse.data;
 
-    const savedCities = await AsyncStorage.getItem(CITY_PREFERENCES_KEY);
+    const savedCities = await SecureStore.getItemAsync(CITY_PREFERENCES_KEY);
     const cityPreferences = savedCities ? JSON.parse(savedCities) : [];
 
-    console.log('Expo Push Token generated:', expoPushToken);
-    console.log('Sending token to backend:', {
+    logger('Expo Push Token generated:', expoPushToken);
+    logger('Sending token to backend:', {
       guestId,
       deviceId,
       expoPushToken,
@@ -185,7 +192,7 @@ export const registerGuestForPushNotifications = async () => {
       ? registeredGuest.devices.find((device: any) => device.deviceId === deviceId || device.expoPushToken === expoPushToken)
       : null;
 
-    console.log('Guest registered successfully:', {
+    logger('Guest registered successfully:', {
       id: registeredGuest?._id,
       guestId: registeredGuest?.guestId,
       deviceId,
@@ -195,11 +202,11 @@ export const registerGuestForPushNotifications = async () => {
       notificationsEnabled: registeredGuest?.notificationsEnabled,
     });
 
-    await AsyncStorage.setItem(NOTIFICATIONS_ENABLED_KEY, 'true');
+    await SecureStore.setItemAsync(NOTIFICATIONS_ENABLED_KEY, 'true');
 
     return expoPushToken;
   } catch (error: any) {
-    console.log('registerGuestForPushNotifications error:', {
+    logger('registerGuestForPushNotifications error:', {
       message: error?.message,
       status: error?.response?.status,
       data: error?.response?.data,
@@ -221,7 +228,7 @@ export const showLocalTestNotification = async () => {
   }
 
   if (finalStatus !== 'granted') {
-    console.log('Notification permission not granted for local test.');
+    logger('Notification permission not granted for local test.');
     return;
   }
 
