@@ -4,9 +4,8 @@ import axios from 'axios';
 export const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL ||
   process.env.EXPO_PUBLIC_API_BASE_URL ||
-  "https://api.inminut.com/"
 
-  if (!API_BASE_URL) {
+if (!API_BASE_URL) {
   throw new Error('EXPO_PUBLIC_API_URL missing');
 }
 const apiClient = axios.create({
@@ -18,13 +17,13 @@ const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use((config) => {
-if (__DEV__) {
-  logger('API Request:', {
-    method: config.method,
-    url: `${config.baseURL}${config.url}`,
-    data: config.data,
-  });
-}
+  if (__DEV__) {
+    logger('API Request:', {
+      method: config.method,
+      url: `${config.baseURL}${config.url}`,
+      data: config.data,
+    });
+  }
 
   return config;
 });
@@ -32,15 +31,15 @@ if (__DEV__) {
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-if (__DEV__) {
-  logger('API Error:', {
-    baseURL: error?.config?.baseURL,
-    url: error?.config?.url,
-    message: error?.message,
-    status: error?.response?.status,
-    data: error?.response?.data,
-  });
-}
+    if (__DEV__) {
+      logger('API Error:', {
+        baseURL: error?.config?.baseURL,
+        url: error?.config?.url,
+        message: error?.message,
+        status: error?.response?.status,
+        data: error?.response?.data,
+      });
+    }
 
     return Promise.reject(error);
   }

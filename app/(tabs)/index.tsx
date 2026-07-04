@@ -1,6 +1,7 @@
 import { View, FlatList, StyleSheet, RefreshControl, Text, Pressable, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Image as ExpoImage } from 'expo-image';
 
 import NewsCard from '@/components/NewsCard';
 import AdCard from '@/components/AdCard';
@@ -13,7 +14,8 @@ import { useAppStore } from '@/store';
 import { Ad, NewsItem, EmbedItem } from '@/api';
 import { AppPalette } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '@/utils/storage';
+import { getMediaUrl } from '@/utils/media';
 
 const CITY_PREFERENCE_SETUP_KEY = 'city_preference_setup_done';
 
@@ -43,14 +45,17 @@ export default function HomeScreen() {
     fetchAdvertisements,
     fetchEmbeds,
     fetchCities,
+    fetchSettings,
     loadCityPreferences,
     saveCityPreferences,
     loadSavedNews,
+    loadLikedNews,
     trackNewsView,
     setSelectedCategory,
     isLoading,
     error,
     theme,
+    settings,
   } = useAppStore();
 
   const isDark = theme === 'dark';
@@ -93,7 +98,15 @@ export default function HomeScreen() {
       hasCompletedAppGuide(),
     ]);
 
-    await Promise.all([fetchCategories(), fetchAdvertisements(), fetchEmbeds(), fetchCities(), loadSavedNews()]);
+    await Promise.all([
+      fetchCategories(), 
+      fetchAdvertisements(), 
+      fetchEmbeds(), 
+      fetchCities(), 
+      fetchSettings(),
+      loadSavedNews(),
+      loadLikedNews()
+    ]);
 
     if (!onboardingDone) {
       setShowOnboarding(true);
@@ -108,7 +121,7 @@ export default function HomeScreen() {
       cityIds: savedCityIds,
     });
     setPreferencesLoaded(true);
-  }, [fetchCategories, fetchAdvertisements, fetchCities, fetchNews, selectedCategory, loadCityPreferences, loadSavedNews]);
+  }, [fetchCategories, fetchAdvertisements, fetchCities, fetchNews, selectedCategory, loadCityPreferences, loadSavedNews, loadLikedNews]);
 
   
   useEffect(() => {
@@ -154,13 +167,25 @@ export default function HomeScreen() {
   // 1. Inject ads/embeds that should appear before any news items (position === 0)
   advertisements.forEach((ad) => {
     const position = ad.positionAfterNews !== undefined ? Number(ad.positionAfterNews) : 4;
-    if (ad.isEnabled && position === 0) {
+    const adCategories = ad.categories?.map(c => typeof c === 'string' ? c : c?._id).filter(Boolean) || [];
+    const isTargetingAll = adCategories.length === 0;
+    const matchesCategory = selectedCategory 
+      ? (isTargetingAll || adCategories.includes(selectedCategory)) 
+      : isTargetingAll;
+
+    if (ad.isEnabled && position === 0 && matchesCategory) {
       feedItems.push({ type: 'ad', data: ad, key: `${ad._id}-top` });
     }
   });
   embeds.forEach((emb) => {
     const position = emb.positionAfterNews !== undefined ? Number(emb.positionAfterNews) : 5;
-    if (emb.isEnabled && position === 0) {
+    const embCategories = emb.categories?.map(c => typeof c === 'string' ? c : c?._id).filter(Boolean) || [];
+    const isTargetingAll = embCategories.length === 0;
+    const matchesCategory = selectedCategory 
+      ? (isTargetingAll || embCategories.includes(selectedCategory)) 
+      : isTargetingAll;
+
+    if (emb.isEnabled && position === 0 && matchesCategory) {
       feedItems.push({ type: 'embed', data: emb, key: `${emb._id}-top` });
     }
   });
@@ -170,13 +195,25 @@ export default function HomeScreen() {
     feedItems.push({ type: 'news', data: item });
     advertisements.forEach((ad) => {
       const position = ad.positionAfterNews !== undefined ? Number(ad.positionAfterNews) : 4;
-      if (ad.isEnabled && position > 0 && index + 1 === position) {
+      const adCategories = ad.categories?.map(c => typeof c === 'string' ? c : c?._id).filter(Boolean) || [];
+      const isTargetingAll = adCategories.length === 0;
+      const matchesCategory = selectedCategory 
+        ? (isTargetingAll || adCategories.includes(selectedCategory)) 
+        : isTargetingAll;
+
+      if (ad.isEnabled && position > 0 && index + 1 === position && matchesCategory) {
         feedItems.push({ type: 'ad', data: ad, key: `${ad._id}-${index}` });
       }
     });
     embeds.forEach((emb) => {
       const position = emb.positionAfterNews !== undefined ? Number(emb.positionAfterNews) : 5;
-      if (emb.isEnabled && position > 0 && index + 1 === position) {
+      const embCategories = emb.categories?.map(c => typeof c === 'string' ? c : c?._id).filter(Boolean) || [];
+      const isTargetingAll = embCategories.length === 0;
+      const matchesCategory = selectedCategory 
+        ? (isTargetingAll || embCategories.includes(selectedCategory)) 
+        : isTargetingAll;
+
+      if (emb.isEnabled && position > 0 && index + 1 === position && matchesCategory) {
         feedItems.push({ type: 'embed', data: emb, key: `${emb._id}-${index}` });
       }
     });
@@ -205,11 +242,19 @@ export default function HomeScreen() {
         <View style={[styles.hero, { backgroundColor: themeStyles.bg }]}>
           <View style={styles.heroTopRow}>
             <View style={styles.logoBox}>
-              <View style={[styles.logoImageWrap, isDark && { backgroundColor: '#020617', borderColor: '#334155' }]}>
-                <Image
-                  source={isDark ? require('../../assets/images/logo-dark.png') : require('../../assets/images/logo-light.png')}
+              <View style={styles.logoImageWrap}>
+                <ExpoImage
+                  source={
+                    settings?.appLogo 
+                      ? { uri: getMediaUrl(settings.appLogo) }
+                      : isDark 
+                        ? require('../../assets/images/logo-dark.png') 
+                        : require('../../assets/images/logo-light.png')
+                  }
                   style={styles.logo}
-                  resizeMode="contain"
+                  contentFit="contain"
+                  contentPosition="left center"
+                  transition={200}
                 />
               </View>
             </View>
@@ -328,39 +373,24 @@ const styles = StyleSheet.create({
   },
   logoBox: {
     flex: 1,
+    height: 56,
     minWidth: 0,
     flexDirection: 'row',
-    alignItems: 'center',
-    // backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    paddingVertical: 8,
-    paddingLeft: 8,
-    paddingRight: 12,
-    // borderWidth: 1,
-    // borderColor: '#FECACA',
-    // shadowColor: '#111111',
-    // shadowOffset: { width: 0, height: 5 },
-    // shadowOpacity: 0.08,
-    // shadowRadius: 12,
-    // elevation: 3,
+    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
   },
 
   logoImageWrap: {
-    width: 142,
-    height: 46,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#FEE2E2',
-    alignItems: 'center',
+    flex: 1,
+    height: '100%',
+    width: '100%',
+    alignItems: 'flex-start',
     justifyContent: 'center',
-    overflow: 'hidden',
-    paddingHorizontal: 8,
   },
 
   logo: {
-    width: 126,
-    height: 34,
+    width: '100%',
+    height: '100%',
   },
 
   logoTextWrap: {

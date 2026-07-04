@@ -27,7 +27,10 @@ import MediaDisplay from "@/components/MediaDisplay";
 import { shareNewsDirect } from "@/utils/share";
 import { getImageMedia, getMediaUrl } from "@/utils/media";
 import { captureRef } from "react-native-view-shot";
-import Share from "react-native-share";
+let Share: any;
+if (Platform.OS !== "web") {
+  Share = require("react-native-share").default || require("react-native-share");
+}
 import BrandedShareImage from "@/components/BrandedShareImage";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
@@ -87,7 +90,7 @@ export default function NewsCard({
   onMediaLayout,
   onActionsLayout,
 }: NewsCardProps) {
-  const { savedNews, toggleSavedNews, trackNewsShare } = useAppStore();
+  const { savedNews, toggleSavedNews, likedNews, toggleLikedNews, trackNewsShare, settings } = useAppStore();
   const mediaRef = useRef<View>(null);
   const actionsRef = useRef<View>(null);
 
@@ -115,6 +118,7 @@ export default function NewsCard({
     }
   };
   const isSaved = savedNews.includes(item._id);
+  const isLiked = likedNews.includes(item._id);
   const images = getImageMedia(item.media || []);
   const nonImageMedia = (item.media || []).filter(
     (m) => !!m.url && m.type !== "image",
@@ -256,10 +260,16 @@ export default function NewsCard({
   };
 
   const shareFirstImageAsBrandedPng = async () => {
+    if (Platform.OS === "web") {
+      Alert.alert("Share", "Image sharing is not supported on web preview.");
+      return;
+    }
     const hasImage = images.length > 0;
     const firstImageUrl = hasImage
       ? getMediaUrl(images[0]?.url)
-      : "breaking_placeholder";
+      : settings?.defaultShareImage
+        ? getMediaUrl(settings.defaultShareImage)
+        : "breaking_placeholder";
     if (!firstImageUrl)
       return shareNewsDirect({
         title: item.title,
@@ -298,6 +308,10 @@ export default function NewsCard({
   const buildWhatsAppMessage = () => PLAY_STORE_LINK;
 
   const handleWhatsAppShare = async () => {
+    if (Platform.OS === "web") {
+      Alert.alert("Share", "WhatsApp sharing is not supported on web preview.");
+      return;
+    }
     if (sharing || whatsappSharing) return;
 
     try {
@@ -481,18 +495,7 @@ export default function NewsCard({
             </Animated.View>
           )}
 
-          <TouchableOpacity
-            style={styles.mediaBadge}
-            activeOpacity={0.85}
-            onPress={() => openImagePreview(activeImageIndex)}
-          >
-            <Ionicons name="expand-outline" size={13} color="#fff" />
-            <Text style={styles.mediaBadgeText}>
-              {images.length > 1
-                ? `${activeImageIndex + 1}/${images.length}`
-                : "OPEN"}
-            </Text>
-          </TouchableOpacity>
+
 
           {images.length > 1 && (
             <View style={styles.imageDots}>
@@ -733,7 +736,7 @@ export default function NewsCard({
         )}
 
         <View style={styles.footer}>
-          {!!(item.reporter?.name?.trim() || item.reporter?.avatar?.trim()) && (
+          {!item.hideReporter && !!(item.reporter?.name?.trim() || item.reporter?.avatar?.trim()) && (
             <View style={styles.reporterContainer}>
               {!!item.reporter?.avatar?.trim() && (
                 <Image
@@ -823,6 +826,29 @@ export default function NewsCard({
                 }
               />
             </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => toggleLikedNews(item._id)}
+              style={[
+                styles.actionButton,
+                isDark && {
+                  backgroundColor: "#334155",
+                  borderColor: "#475569",
+                },
+              ]}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name={isLiked ? "heart" : "heart-outline"}
+                size={19}
+                color={
+                  isLiked
+                    ? "#EF4444" // red color for like
+                    : isDark
+                      ? "#F8FAFC"
+                      : AppPalette.ink
+                }
+              />
+            </TouchableOpacity>
           </View>
         </View>
       </View>
@@ -839,13 +865,18 @@ export default function NewsCard({
               imageHeight={
                 shareImageUri === "breaking_placeholder"
                   ? 850
-                  : Math.round(972 / (imageRatios[images[0]?.url] || 1.35))
+                  : shareImageUri === getMediaUrl(settings?.defaultShareImage || "")
+                    ? 850
+                    : Math.round(972 / (imageRatios[images[0]?.url] || 1.35))
               }
               title={item.title}
               description={plainDescription}
               titleColor={item.titleColor || "#111111"}
               publishedDate={item.publishedDate}
               reporterName={item.reporter?.name}
+              isBreaking={item.isBreaking}
+              breakingText={item.breakingText}
+              breakingTextColor={item.breakingTextColor}
             />
           </View>
         </View>
@@ -881,7 +912,7 @@ const styles = StyleSheet.create({
     }),
   },
   imageWrap: { position: "relative", backgroundColor: "#F8FAFC" },
-  imageSlide: { width: CARD_WIDTH, backgroundColor: "#F8FAFC" },
+  imageSlide: { width: CARD_WIDTH - 2, backgroundColor: "#F8FAFC" },
   image: { width: "100%", minHeight: 190, backgroundColor: "#F8FAFC" },
   imageDots: {
     position: "absolute",
@@ -1018,19 +1049,19 @@ const styles = StyleSheet.create({
   date: { fontSize: 12, color: AppPalette.muted, fontWeight: "700" },
   titleLinkButton: { alignSelf: "stretch" },
   title: {
+    fontFamily: "HindVadodara_700Bold",
     fontSize: 20,
     lineHeight: 26,
-    fontWeight: "900",
     color: AppPalette.ink,
     marginBottom: 8,
   },
-  clickableTitle: { textDecorationLine: "underline" },
+  clickableTitle: {},
   titleLinkIcon: { color: AppPalette.brightOrange, fontWeight: "900" },
   description: {
+    fontFamily: "HindVadodara_600SemiBold",
     fontSize: 14,
     lineHeight: 21,
     color: AppPalette.slate,
-    fontWeight: "600",
   },
   descriptionWrap: {
     marginBottom: 12,
@@ -1062,10 +1093,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   articleContent: {
+    fontFamily: "HindVadodara_500Medium",
     color: AppPalette.ink,
     fontSize: 14,
     lineHeight: 22,
-    fontWeight: "500",
   },
   readMoreButton: {
     alignSelf: "flex-start",

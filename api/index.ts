@@ -28,6 +28,7 @@ export interface NewsItem {
   publishedDate?: string;
   media?: MediaItem[];
   reporter?: { name?: string; avatar?: string };
+  hideReporter?: boolean;
   isBreaking?: boolean;
   breakingText?: string;
   titleColor?: string;
@@ -43,6 +44,7 @@ export interface NewsItem {
   viewCount?: number;
   saveCount?: number;
   shareCount?: number;
+  likeCount?: number;
 }
 
 export interface Ad {
@@ -53,6 +55,7 @@ export interface Ad {
   redirectUrl: string;
   positionAfterNews: number;
   isEnabled: boolean;
+  categories?: any[];
   viewCount?: number;
   clickCount?: number;
 }
@@ -64,8 +67,16 @@ export interface EmbedItem {
   height: number;
   positionAfterNews: number;
   isEnabled: boolean;
+  categories?: any[];
   viewCount?: number;
   clickCount?: number;
+}
+
+export interface Settings {
+  appLogo?: string;
+  appIcon?: string;
+  defaultNewsImage?: string;
+  defaultShareImage?: string;
 }
 
 export interface RegisterGuestPayload {
@@ -130,6 +141,11 @@ export const api = {
   getCities: async () => {
     const response = await apiClient.get('/api/locations/cities');
     return response.data.data as City[];
+  },
+
+  getSettings: async () => {
+    const response = await apiClient.get('/api/settings');
+    return response.data.settings as Settings;
   },
 
 registerGuestUser: async (payload: RegisterGuestPayload) => {

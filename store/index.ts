@@ -1,9 +1,10 @@
 import { create } from 'zustand';
-import { NewsItem, Category, City, Ad, EmbedItem, api } from '@/api';
-import * as SecureStore from 'expo-secure-store';
+import { NewsItem, Category, City, Ad, EmbedItem, Settings, api } from '@/api';
+import * as SecureStore from '@/utils/storage';
 import { getOrCreateGuestId } from '@/utils/notifications';
 import { logger } from '@/utils/logger';
 const SAVED_NEWS_KEY = 'saved_news';
+const LIKED_NEWS_KEY = 'liked_news';
 const CITY_PREFERENCES_KEY = 'city_preferences';
 
 interface AppState {
@@ -14,8 +15,10 @@ interface AppState {
   cities: City[];
   selectedCityPreferences: string[];
   savedNews: string[];
+  likedNews: string[];
   selectedCategory: string | null;
   searchQuery: string;
+  settings: Settings | null;
   isLoading: boolean;
   error: string | null;
   theme: 'light' | 'dark';
@@ -25,12 +28,15 @@ interface AppState {
   fetchEmbeds: () => Promise<void>;
   fetchCategories: () => Promise<void>;
   fetchCities: () => Promise<void>;
+  fetchSettings: () => Promise<void>;
   loadCityPreferences: () => Promise<string[]>;
   saveCityPreferences: (cityIds: string[]) => Promise<void>;
   toggleSavedNews: (newsId: string) => Promise<void>;
   trackNewsView: (newsId: string) => Promise<void>;
   trackNewsShare: (newsId: string) => Promise<void>;
   loadSavedNews: () => Promise<void>;
+  loadLikedNews: () => Promise<void>;
+  toggleLikedNews: (newsId: string) => Promise<void>;
   setSelectedCategory: (categoryId: string | null) => void;
   setSearchQuery: (query: string) => void;
   resetFilters: () => void;
@@ -48,8 +54,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   cities: [],
   selectedCityPreferences: [],
   savedNews: [],
+  likedNews: [],
   selectedCategory: null,
   searchQuery: '',
+  settings: null,
   isLoading: false,
   error: null,
   theme: 'light',
@@ -107,6 +115,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
+  fetchSettings: async () => {
+    try {
+      const settings = await api.getSettings();
+      set({ settings });
+    } catch (err) {
+      console.error('Fetch settings error:', err);
+    }
+  },
+
   loadCityPreferences: async () => {
     try {
       const saved = await SecureStore.getItemAsync(CITY_PREFERENCES_KEY);
@@ -150,6 +167,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
+  loadLikedNews: async () => {
+    try {
+      const liked = await SecureStore.getItemAsync(LIKED_NEWS_KEY);
+      if (liked) {
+        set({ likedNews: JSON.parse(liked) });
+      }
+    } catch (err) {
+      console.error('Load liked news error:', err);
+    }
+  },
+
   toggleSavedNews: async (newsId) => {
     const wasSaved = get().savedNews.includes(newsId);
     const newSavedNews = wasSaved
@@ -174,12 +202,45 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({
         news: get().news.map((item) =>
           item._id === newsId
-            ? { ...item, saveCount: result.saveCount, shareCount: result.shareCount, viewCount: result.viewCount }
+            ? { ...item, saveCount: result.saveCount, shareCount: result.shareCount, viewCount: result.viewCount, likeCount: result.likeCount }
             : item
         ),
       });
     } catch (err) {
       logger('News save tracking skipped:', err);
+    }
+  },
+
+  toggleLikedNews: async (newsId) => {
+    const wasLiked = get().likedNews.includes(newsId);
+    const newLikedNews = wasLiked
+      ? get().likedNews.filter((id) => id !== newsId)
+      : [...get().likedNews, newsId];
+
+    set({ likedNews: newLikedNews });
+
+    try {
+      await SecureStore.setItemAsync(LIKED_NEWS_KEY, JSON.stringify(newLikedNews));
+    } catch (err) {
+      console.error('Like news error:', err);
+    }
+
+    try {
+      const guestId = await getOrCreateGuestId();
+      const result = await api.trackNewsInteraction(newsId, {
+        guestId,
+        action: wasLiked ? 'unlike' : 'like',
+        metadata: { cityPreferences: get().selectedCityPreferences },
+      });
+      set({
+        news: get().news.map((item) =>
+          item._id === newsId
+            ? { ...item, likeCount: result.likeCount, saveCount: result.saveCount, shareCount: result.shareCount, viewCount: result.viewCount }
+            : item
+        ),
+      });
+    } catch (err) {
+      logger('News like tracking skipped:', err);
     }
   },
 

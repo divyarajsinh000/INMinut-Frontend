@@ -1,6 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { StyleSheet, Text, View } from 'react-native';
-import { Image } from 'expo-image';
+import { StyleSheet, Text, View, Image } from 'react-native';
 
 interface Props {
   imageUri: string;
@@ -10,6 +9,9 @@ interface Props {
   titleColor?: string;
   publishedDate?: string;
   reporterName?: string;
+  isBreaking?: boolean;
+  breakingText?: string;
+  breakingTextColor?: string;
 }
 
 const stripText = (value?: string, maxLength = 420) => {
@@ -48,6 +50,9 @@ export default function BrandedShareImage({
   titleColor,
   publishedDate,
   reporterName,
+  isBreaking,
+  breakingText,
+  breakingTextColor,
 }: Props) {
   const finalTitle = stripText(title, 140);
   const finalDescription = stripText(description, 260);
@@ -62,10 +67,14 @@ export default function BrandedShareImage({
             <Image
               source={require('../assets/images/logo-light.png')}
               style={styles.logo}
-              contentFit="contain"
+              resizeMode="contain"
             />
           </View>
-          <Text style={styles.breakingText}>BREAKING NEWS</Text>
+          {isBreaking && (
+            <Text style={[styles.breakingText, breakingTextColor ? { color: breakingTextColor } : null]}>
+              {breakingText || 'BREAKING NEWS'}
+            </Text>
+          )}
         </View>
 
         {/* Card Image */}
@@ -77,7 +86,7 @@ export default function BrandedShareImage({
                 : { uri: imageUri }
             }
             style={styles.mainImage}
-            contentFit={imageUri === 'breaking_placeholder' ? 'cover' : 'contain'}
+            resizeMode={imageUri === 'breaking_placeholder' ? 'cover' : 'contain'}
           />
         </View>
 

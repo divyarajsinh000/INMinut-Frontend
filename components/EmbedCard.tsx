@@ -73,6 +73,26 @@ export default function EmbedCard({ item }: EmbedCardProps) {
   const { trackEmbedInteraction } = useAppStore();
   const containerRef = useRef<any>(null);
 
+  const getProcessedEmbedUrl = (str: string) => {
+    const trimmed = (str || '').trim();
+    if (!/^https?:\/\//i.test(trimmed) || trimmed.includes(' ') || trimmed.includes('<iframe') || trimmed.includes('<script')) {
+      return null;
+    }
+    
+    // Auto-convert YouTube watch URLs to embed URLs
+    const ytMatch = trimmed.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
+    if (ytMatch && ytMatch[1]) {
+      return `https://www.youtube.com/embed/${ytMatch[1]}`;
+    }
+    
+    return trimmed;
+  };
+
+  const directUrl = getProcessedEmbedUrl(item.embedCode);
+  const processedEmbedCode = directUrl
+    ? `<iframe src="${directUrl}" width="100%" height="100%" style="border:none; border-radius:8px; min-height:${height - 16}px;" allowfullscreen allow="autoplay; encrypted-media; picture-in-picture"></iframe>`
+    : item.embedCode;
+
   useEffect(() => {
     trackEmbedInteraction(item._id, 'view');
   }, [item._id, trackEmbedInteraction]);
@@ -114,7 +134,7 @@ export default function EmbedCard({ item }: EmbedCardProps) {
           cursor: 'pointer',
         }}
         onClick={() => trackEmbedInteraction(item._id, 'click')}
-        dangerouslySetInnerHTML={{ __html: item.embedCode }}
+        dangerouslySetInnerHTML={{ __html: processedEmbedCode }}
       />
     );
   }
@@ -124,7 +144,7 @@ export default function EmbedCard({ item }: EmbedCardProps) {
       <WebView
         originWhitelist={['*']}
         source={{
-          html: generateHtml(item.embedCode, isDark),
+          html: generateHtml(processedEmbedCode, isDark),
           baseUrl: 'https://youtube.com',
         }}
         style={styles.webview}

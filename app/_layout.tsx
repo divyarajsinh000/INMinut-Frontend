@@ -4,6 +4,15 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { AppState, LogBox, Platform } from 'react-native';
 import { useEffect } from 'react';
+import * as SplashScreen from 'expo-splash-screen';
+import {
+  useFonts,
+  HindVadodara_300Light,
+  HindVadodara_400Regular,
+  HindVadodara_500Medium,
+  HindVadodara_600SemiBold,
+  HindVadodara_700Bold,
+} from '@expo-google-fonts/hind-vadodara';
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -27,6 +36,9 @@ if (Platform.OS === 'web') {
   LogBox.ignoreLogs(['props.pointerEvents is deprecated']);
 }
 
+// Prevent the splash screen from auto-hiding before asset loading is complete.
+SplashScreen.preventAutoHideAsync();
+
 export const unstable_settings = {
   anchor: '(tabs)',
 };
@@ -34,6 +46,20 @@ export const unstable_settings = {
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const loadTheme = useAppStore((state) => state.loadTheme);
+
+  const [loaded, error] = useFonts({
+    HindVadodara_300Light,
+    HindVadodara_400Regular,
+    HindVadodara_500Medium,
+    HindVadodara_600SemiBold,
+    HindVadodara_700Bold,
+  });
+
+  useEffect(() => {
+    if (loaded || error) {
+      SplashScreen.hideAsync();
+    }
+  }, [loaded, error]);
 
   useEffect(() => {
     loadTheme();
@@ -54,6 +80,10 @@ export default function RootLayout() {
       appStateSubscription?.remove?.();
     };
   }, []);
+
+  if (!loaded && !error) {
+    return null;
+  }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

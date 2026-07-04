@@ -5,7 +5,7 @@ import { Image } from 'expo-image';
 
 import { ThemedText } from '@/components/themed-text';
 import { AppPalette } from '@/constants/theme';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '@/utils/storage';
 export const ONBOARDING_DONE_KEY = 'brekingapp_onboarding_done_v1';
 
 interface Props {

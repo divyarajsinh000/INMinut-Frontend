@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '@/utils/storage';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Modal,
