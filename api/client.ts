@@ -4,7 +4,7 @@ import axios from 'axios';
 export const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL ||
   process.env.EXPO_PUBLIC_API_BASE_URL ||
-
+  "https://api.inminut.com/"
 if (!API_BASE_URL) {
   throw new Error('EXPO_PUBLIC_API_URL missing');
 }
