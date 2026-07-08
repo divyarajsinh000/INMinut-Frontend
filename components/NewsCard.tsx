@@ -877,6 +877,7 @@ export default function NewsCard({
               isBreaking={item.isBreaking}
               breakingText={item.breakingText}
               breakingTextColor={item.breakingTextColor}
+              logoUrl={settings?.appLogo ? getMediaUrl(settings.appLogo) : undefined}
             />
           </View>
         </View>

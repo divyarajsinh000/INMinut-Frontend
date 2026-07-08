@@ -12,6 +12,7 @@ interface Props {
   isBreaking?: boolean;
   breakingText?: string;
   breakingTextColor?: string;
+  logoUrl?: string;
 }
 
 const stripText = (value?: string, maxLength = 420) => {
@@ -53,6 +54,7 @@ export default function BrandedShareImage({
   isBreaking,
   breakingText,
   breakingTextColor,
+  logoUrl,
 }: Props) {
   const finalTitle = stripText(title, 140);
   const finalDescription = stripText(description, 260);
@@ -65,7 +67,11 @@ export default function BrandedShareImage({
         <View style={styles.cardHeader}>
           <View style={styles.logoBox}>
             <Image
-              source={require('../assets/images/logo-light.png')}
+              source={
+                logoUrl
+                  ? { uri: logoUrl }
+                  : require('../assets/images/logo-light.png')
+              }
               style={styles.logo}
               resizeMode="contain"
             />

@@ -6,6 +6,8 @@ import { Image } from 'expo-image';
 import { ThemedText } from '@/components/themed-text';
 import { AppPalette } from '@/constants/theme';
 import * as SecureStore from '@/utils/storage';
+import { useAppStore } from '@/store';
+import { getMediaUrl } from '@/utils/media';
 export const ONBOARDING_DONE_KEY = 'brekingapp_onboarding_done_v1';
 
 interface Props {
@@ -41,6 +43,7 @@ export const hasCompletedOnboarding = async () => {
 const OnboardingSlider = ({ visible, onDone }: Props) => {
   const listRef = useRef<FlatList>(null);
   const [index, setIndex] = useState(0);
+  const { settings } = useAppStore();
 
   useEffect(() => {
     if (visible) setIndex(0);
@@ -70,7 +73,11 @@ const OnboardingSlider = ({ visible, onDone }: Props) => {
         <View style={styles.header}>
           <View style={styles.logoBadge}>
             <Image
-              source={require('../assets/images/logo-light.png')}
+              source={
+                settings?.appLogo
+                  ? { uri: getMediaUrl(settings.appLogo) }
+                  : require('../assets/images/logo-light.png')
+              }
               style={styles.logoImage}
               contentFit="contain"
             />
