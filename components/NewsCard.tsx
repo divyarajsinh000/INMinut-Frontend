@@ -29,7 +29,12 @@ import { getImageMedia, getMediaUrl } from "@/utils/media";
 import { captureRef } from "react-native-view-shot";
 let Share: any;
 if (Platform.OS !== "web") {
-  Share = require("react-native-share").default || require("react-native-share");
+  try {
+    Share = require("react-native-share").default || require("react-native-share");
+  } catch {
+    // react-native-share is not available in Expo Go; use a development build.
+    Share = null;
+  }
 }
 import BrandedShareImage from "@/components/BrandedShareImage";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -296,6 +301,10 @@ export default function NewsCard({
       ? capturedUri
       : `file://${capturedUri}`;
 
+    if (!Share) {
+      Alert.alert("Share", "Sharing is not available in Expo Go. Please use a development build.");
+      return;
+    }
     return Share.open({
       url: imageUrl,
       type: "image/jpeg",
@@ -344,6 +353,10 @@ export default function NewsCard({
 
       const message = buildWhatsAppMessage();
 
+      if (!Share) {
+        Alert.alert("Share", "WhatsApp sharing is not available in Expo Go. Please use a development build.");
+        return;
+      }
       await Share.shareSingle({
         social: Share.Social.WHATSAPP,
         url: imageUrl,

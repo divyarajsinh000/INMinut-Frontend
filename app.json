@@ -19,7 +19,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-       "enableProguardInReleaseBuilds": true,
+      "enableProguardInReleaseBuilds": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.news.brekingapp",
       "googleServicesFile": "./google-services.json"
@@ -33,12 +33,12 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/logo.png",
           "imageWidth": 220,
           "resizeMode": "contain",
           "backgroundColor": "#FFF7ED",
           "dark": {
-            "image": "./assets/images/splash-icon-dark.png",
+            "image": "./assets/images/logo.png",
             "backgroundColor": "#0F172A"
           }
         }
@@ -52,7 +52,7 @@
     },
     "backgroundColor": "#FFF7ED",
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/images/logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#FFF7ED"
     },

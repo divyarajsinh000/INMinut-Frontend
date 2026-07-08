@@ -247,9 +247,7 @@ export default function HomeScreen() {
                   source={
                     settings?.appLogo 
                       ? { uri: getMediaUrl(settings.appLogo) }
-                      : isDark 
-                        ? require('../../assets/images/logo-dark.png') 
-                        : require('../../assets/images/logo-light.png')
+                      : require('../../assets/images/logo.png')
                   }
                   style={styles.logo}
                   contentFit="contain"

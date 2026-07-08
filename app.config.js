@@ -39,9 +39,9 @@ export default ({ config }) => ({
     jsEngine: "hermes",
     adaptiveIcon: {
       backgroundColor: "#E6F4FE",
-      foregroundImage: "./assets/images/android-icon-foreground.png",
-      backgroundImage: "./assets/images/android-icon-background.png",
-      monochromeImage: "./assets/images/android-icon-monochrome.png",
+      foregroundImage: "./assets/images/icon.png",
+      backgroundImage: "./assets/images/icon.png",
+      monochromeImage: "./assets/images/icon.png",
     },
     edgeToEdgeEnabled: false,
     softwareKeyboardLayoutMode: "resize",
@@ -72,27 +72,27 @@ export default ({ config }) => ({
 
   web: {
     output: "static",
-    favicon: "./assets/images/favicon.png",
+    favicon: "./assets/images/icon.png",
   },
 
   plugins: [
     "expo-router",
-     [
-        "react-native-share",
-        {
-          "ios": ["whatsapp"],
-          "android": ["com.whatsapp"]
-        }
-      ],
+    [
+      "react-native-share",
+      {
+        "ios": ["whatsapp"],
+        "android": ["com.whatsapp"]
+      }
+    ],
     [
       "expo-splash-screen",
       {
-        image: "./assets/images/splash-icon.png",
+        image: "./assets/images/logo.png",
         imageWidth: 220,
         resizeMode: "contain",
         backgroundColor: "#FFF7ED",
         dark: {
-          image: "./assets/images/splash-icon-dark.png",
+          image: "./assets/images/logo.png",
           backgroundColor: "#0F172A",
         },
       },
@@ -124,7 +124,7 @@ export default ({ config }) => ({
 
   backgroundColor: "#FFF7ED",
   splash: {
-    image: "./assets/images/splash-icon.png",
+    image: "./assets/images/logo.png",
     resizeMode: "contain",
     backgroundColor: "#FFF7ED",
   },

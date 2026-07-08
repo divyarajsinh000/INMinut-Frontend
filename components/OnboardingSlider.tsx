@@ -76,7 +76,7 @@ const OnboardingSlider = ({ visible, onDone }: Props) => {
               source={
                 settings?.appLogo
                   ? { uri: getMediaUrl(settings.appLogo) }
-                  : require('../assets/images/logo-light.png')
+                  : require('../assets/images/logo.png')
               }
               style={styles.logoImage}
               contentFit="contain"

@@ -70,7 +70,7 @@ export default function BrandedShareImage({
               source={
                 logoUrl
                   ? { uri: logoUrl }
-                  : require('../assets/images/logo-light.png')
+                  : require('../assets/images/logo.png')
               }
               style={styles.logo}
               resizeMode="contain"
