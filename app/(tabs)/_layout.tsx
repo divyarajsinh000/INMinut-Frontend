@@ -1,14 +1,39 @@
 import { Tabs } from 'expo-router';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { HapticTab } from '@/components/haptic-tab';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import {
+  getNotificationsEnabled,
+  registerGuestForPushNotifications,
+  setupNotificationResponseListener,
+} from '@/utils/notifications';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme() ?? 'light';
   const active = Colors[colorScheme].tint;
+
+  useEffect(() => {
+    const notificationSubscription = setupNotificationResponseListener();
+    let cancelled = false;
+
+    const initializeNotifications = async () => {
+      const enabled = await getNotificationsEnabled();
+
+      if (!cancelled && enabled) {
+        await registerGuestForPushNotifications();
+      }
+    };
+
+    initializeNotifications();
+
+    return () => {
+      cancelled = true;
+      notificationSubscription.remove();
+    };
+  }, []);
 
   return (
     <Tabs

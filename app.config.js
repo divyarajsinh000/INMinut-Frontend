@@ -1,8 +1,4 @@
 // app.config.js
-// Expo SDK 54-compatible security-focused configuration.
-// IMPORTANT: Never place private API keys, service-account JSON, signing keys,
-// backend secrets, database credentials, or Expo access tokens in `extra`.
-
 export default ({ config }) => ({
   ...config,
 
@@ -11,7 +7,7 @@ export default ({ config }) => ({
   scheme: "inminut",
   version: "1.0.0",
   orientation: "portrait",
-  icon: "./assets/images/icon.png",
+  icon: "./assets/images/inminut-app-icon.png",
   userInterfaceStyle: "light",
   newArchEnabled: true,
 
@@ -38,21 +34,15 @@ export default ({ config }) => ({
   android: {
     jsEngine: "hermes",
     adaptiveIcon: {
-      backgroundColor: "#E6F4FE",
-      foregroundImage: "./assets/images/icon.png",
-      backgroundImage: "./assets/images/icon.png",
-      monochromeImage: "./assets/images/icon.png",
+      backgroundColor: "#FFFFFF",
+      foregroundImage: "./assets/images/inminut-adaptive-foreground.png",
     },
     edgeToEdgeEnabled: false,
     softwareKeyboardLayoutMode: "resize",
     predictiveBackGestureEnabled: false,
     package: "com.news.brekingapp",
     googleServicesFile: "./google-services.json",
-
     permissions: ["NOTIFICATIONS", "RECEIVE_BOOT_COMPLETED", "VIBRATE"],
-
-    // Prevent dependencies from silently adding permissions the news app does
-    // not need. Remove an entry only when that feature is intentionally added.
     blockedPermissions: [
       "android.permission.ACCESS_COARSE_LOCATION",
       "android.permission.ACCESS_FINE_LOCATION",
@@ -72,7 +62,7 @@ export default ({ config }) => ({
 
   web: {
     output: "static",
-    favicon: "./assets/images/icon.png",
+    favicon: "./assets/images/inminut-app-icon.png",
   },
 
   plugins: [
@@ -80,19 +70,19 @@ export default ({ config }) => ({
     [
       "react-native-share",
       {
-        "ios": ["whatsapp"],
-        "android": ["com.whatsapp"]
-      }
+        ios: ["whatsapp"],
+        android: ["com.whatsapp"],
+      },
     ],
     [
       "expo-splash-screen",
       {
-        image: "./assets/images/logo.png",
-        imageWidth: 220,
+        image: "./assets/images/inminut-native-splash.png",
+        imageWidth: 120,
         resizeMode: "contain",
         backgroundColor: "#FFF7ED",
         dark: {
-          image: "./assets/images/logo.png",
+          image: "./assets/images/inminut-native-splash.png",
           backgroundColor: "#0F172A",
         },
       },
@@ -100,8 +90,6 @@ export default ({ config }) => ({
     [
       "expo-notifications",
       {
-        // Add a dedicated monochrome notification icon when available:
-        // icon: "./assets/images/notification-icon.png",
         color: "#0F172A",
       },
     ],
@@ -123,22 +111,13 @@ export default ({ config }) => ({
   },
 
   backgroundColor: "#FFF7ED",
-  splash: {
-    image: "./assets/images/logo.png",
-    resizeMode: "contain",
-    backgroundColor: "#FFF7ED",
-  },
 
   extra: {
     router: {},
     eas: {
-      // Public project identifier, not a secret.
       projectId: "42677210-2162-4706-9726-10b3c163210b",
     },
-
-    // Only public client configuration belongs here, for example:
     apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL,
-    // Never put server tokens, private API keys, or service credentials here.
   },
 
   owner: "herryjoshi",

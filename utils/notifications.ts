@@ -61,19 +61,26 @@ export const getNotificationsEnabled = async () => {
 };
 
 export const setupNotificationResponseListener = () => {
-  const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-    const data = response.notification.request.content.data;
-    logger('Notification clicked:', data);
-  });
-Notifications.addNotificationReceivedListener(
-  (notification) => {
-    console.log(
-      'Notification Received:',
-      JSON.stringify(notification, null, 2)
-    );
-  }
-);
-  return subscription;
+  const responseSubscription =
+    Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data;
+      logger('Notification clicked:', data);
+    });
+
+  const receivedSubscription =
+    Notifications.addNotificationReceivedListener((notification) => {
+      logger(
+        'Notification received:',
+        JSON.stringify(notification, null, 2)
+      );
+    });
+
+  return {
+    remove: () => {
+      responseSubscription.remove();
+      receivedSubscription.remove();
+    },
+  };
 };
 
 export const setupAndroidNotificationChannel = async () => {
@@ -161,8 +168,15 @@ export const registerGuestForPushNotifications = async () => {
       return null;
     }
 
-    const tokenResponse = await Notifications.getExpoPushTokenAsync({ projectId });
+    const tokenResponse = await Notifications.getExpoPushTokenAsync({
+      projectId,
+    });
     const expoPushToken = tokenResponse.data;
+
+    if (!expoPushToken) {
+      logger('Expo returned an empty push token.');
+      return null;
+    }
 
     const savedCities = await SecureStore.getItemAsync(CITY_PREFERENCES_KEY);
     const cityPreferences = savedCities ? JSON.parse(savedCities) : [];
@@ -241,3 +255,4 @@ export const showLocalTestNotification = async () => {
     trigger: null,
   });
 };
+

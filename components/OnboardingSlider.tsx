@@ -80,6 +80,8 @@ const OnboardingSlider = ({ visible, onDone }: Props) => {
               }
               style={styles.logoImage}
               contentFit="contain"
+              contentPosition="left center"
+              transition={0}
             />
           </View>
           <Pressable onPress={complete} hitSlop={12}>
@@ -169,14 +171,17 @@ const styles = StyleSheet.create({
   },
   logoBadge: {
     flex: 1,
-    height: 46,
+    minWidth: 0,
+    height: 58,
+    paddingRight: 12,
     borderRadius: 16,
     alignItems: 'flex-start',
     justifyContent: 'center',
+    overflow: 'visible',
   },
   logoImage: {
-    width: 150,
-    height: 42,
+    width: 190,
+    height: 54,
   },
   brand: {
     flex: 1,

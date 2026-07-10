@@ -39,7 +39,7 @@ if (Platform.OS !== "web") {
 import BrandedShareImage from "@/components/BrandedShareImage";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
-const CARD_WIDTH = Dimensions.get("window").width - 32;
+const INITIAL_CARD_WIDTH = Dimensions.get("window").width - 32;
 const DEFAULT_TITLE_FONT_SIZE = 20;
 const DEFAULT_DESCRIPTION_FONT_SIZE = 14;
 
@@ -136,7 +136,13 @@ export default function NewsCard({
   const [whatsappSharing, setWhatsappSharing] = useState(false);
   const [shareImageUri, setShareImageUri] = useState<string | null>(null);
   const brandedShareRef = useRef<View>(null);
+  const shareCaptureReadyRef = useRef(false);
+  const shareCaptureResolverRef = useRef<(() => void) | null>(null);
   const [imageRatios, setImageRatios] = useState<Record<string, number>>({});
+  const [cardWidth, setCardWidth] = useState(INITIAL_CARD_WIDTH);
+  const [mediaWidth, setMediaWidth] = useState(
+    Math.max(1, INITIAL_CARD_WIDTH - 2),
+  );
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const [renderedLines, setRenderedLines] = useState<any[]>([]);
   const blinkAnim = useRef(new Animated.Value(1)).current;
@@ -144,6 +150,8 @@ export default function NewsCard({
   useEffect(() => {
     setRenderedLines([]);
     setDescriptionExpanded(false);
+    setActiveImageIndex(0);
+    setImageRatios({});
   }, [item._id]);
 
   useEffect(() => {
@@ -237,12 +245,29 @@ export default function NewsCard({
 
   const getImageHeight = (media?: MediaItem) => {
     const url = media?.url || "";
-    const ratio = imageRatios[url] || 1.35;
-    const rawHeight = CARD_WIDTH / Math.max(ratio, 0.45);
-    const minHeight = hasOnlyMedia ? 260 : 190;
-    const maxHeight = hasOnlyMedia ? 620 : 520;
-    return Math.round(Math.min(maxHeight, Math.max(minHeight, rawHeight)));
+    const ratio = imageRatios[url];
+
+    // Stable initial height while the remote image dimensions are loading.
+    if (!ratio || !Number.isFinite(ratio) || ratio <= 0) {
+      return Math.round(mediaWidth * 0.9);
+    }
+
+    const naturalHeight = mediaWidth / ratio;
+
+    // Always preserve the complete image. Landscape images stay readable,
+    // while portrait images can grow taller without being clipped.
+    const minHeight = 210;
+    const maxHeight = Math.round(mediaWidth * 2.15);
+
+    return Math.round(
+      Math.min(maxHeight, Math.max(minHeight, naturalHeight)),
+    );
   };
+
+  const activeImageHeight =
+    images.length > 0
+      ? getImageHeight(images[Math.min(activeImageIndex, images.length - 1)])
+      : 0;
 
   const handleImageLoad = (media: MediaItem, event: any) => {
     const width =
@@ -262,6 +287,39 @@ export default function NewsCard({
       if (Math.abs((prev[media.url] || 0) - ratio) < 0.01) return prev;
       return { ...prev, [media.url]: ratio };
     });
+  };
+
+  const waitForShareCaptureReady = async (timeoutMs = 10000) => {
+    shareCaptureReadyRef.current = false;
+
+    await new Promise<void>((resolve, reject) => {
+      let settled = false;
+
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        shareCaptureResolverRef.current = null;
+        resolve();
+      };
+
+      const timeout = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        shareCaptureResolverRef.current = null;
+        reject(new Error("Share image took too long to load."));
+      }, timeoutMs);
+
+      shareCaptureResolverRef.current = finish;
+    });
+
+    // Wait for the completed layout to be committed before view-shot runs.
+    await new Promise<void>((resolve) => setTimeout(resolve, 120));
+  };
+
+  const handleShareCaptureReady = () => {
+    shareCaptureReadyRef.current = true;
+    shareCaptureResolverRef.current?.();
   };
 
   const shareFirstImageAsBrandedPng = async () => {
@@ -287,8 +345,11 @@ export default function NewsCard({
       });
 
     setShareImageUri(firstImageUrl);
+    await waitForShareCaptureReady();
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 250));
+    if (!brandedShareRef.current) {
+      throw new Error("Branded share image is not ready.");
+    }
 
     const capturedUri = await captureRef(brandedShareRef, {
       format: "jpg",
@@ -332,9 +393,7 @@ export default function NewsCard({
           : "breaking_placeholder";
 
       setShareImageUri(firstImageUrl);
-
-      // Wait for the hidden branded card and its image to render before capture.
-      await new Promise<void>((resolve) => setTimeout(resolve, 450));
+      await waitForShareCaptureReady();
 
       if (!brandedShareRef.current) {
         throw new Error("Branded share image is not ready.");
@@ -448,6 +507,12 @@ export default function NewsCard({
 
   return (
     <View
+      onLayout={(event) => {
+        const nextWidth = Math.round(event.nativeEvent.layout.width);
+        if (nextWidth > 0 && Math.abs(nextWidth - cardWidth) > 1) {
+          setCardWidth(nextWidth);
+        }
+      }}
       style={[
         styles.container,
         isDark && { backgroundColor: "#1E293B", borderColor: "#334155" },
@@ -456,26 +521,62 @@ export default function NewsCard({
       {images.length > 0 ? (
         <View
           ref={mediaRef}
-          onLayout={handleMediaLayout}
-          style={styles.imageWrap}
+          onLayout={(event) => {
+            const nextWidth = Math.round(event.nativeEvent.layout.width);
+            if (nextWidth > 0 && Math.abs(nextWidth - mediaWidth) > 1) {
+              setMediaWidth(nextWidth);
+            }
+            handleMediaLayout();
+          }}
+          style={[styles.imageWrap, { height: activeImageHeight }]}
         >
           <ScrollView
             horizontal
-            pagingEnabled
+            bounces={false}
+            overScrollMode="never"
+            nestedScrollEnabled
+            directionalLockEnabled
+            decelerationRate="fast"
+            snapToOffsets={images.map((_, index) => index * mediaWidth)}
+            snapToAlignment="start"
+            disableIntervalMomentum
             showsHorizontalScrollIndicator={false}
             onMomentumScrollEnd={handleImageScroll}
+            onScrollEndDrag={handleImageScroll}
+            scrollEventThrottle={16}
+            style={{
+              width: mediaWidth,
+              height: activeImageHeight,
+              overflow: "hidden",
+            }}
+            contentContainerStyle={{
+              width: mediaWidth * images.length,
+              height: activeImageHeight,
+            }}
           >
             {images.map((media: MediaItem, index) => (
               <TouchableOpacity
                 key={`${media.url}-${index}`}
                 activeOpacity={0.92}
                 onPress={() => openImagePreview(index)}
-                style={styles.imageSlide}
+                style={[
+                  styles.imageSlide,
+                  {
+                    width: mediaWidth,
+                    minWidth: mediaWidth,
+                    maxWidth: mediaWidth,
+                    height: activeImageHeight,
+                  },
+                ]}
               >
                 <Image
                   source={{ uri: getMediaUrl(media.url) }}
-                  style={[styles.image, { height: getImageHeight(media) }]}
-                  contentFit="contain"
+                  style={[styles.image, { width: mediaWidth, height: activeImageHeight }]}
+                  contentFit="cover"
+                  contentPosition="center"
+                  transition={0}
+                  cachePolicy="memory-disk"
+                  recyclingKey={`${item._id}-${media.url}-${index}`}
                   onLoad={(event) => handleImageLoad(media, event)}
                 />
               </TouchableOpacity>
@@ -671,7 +772,7 @@ export default function NewsCard({
             {descriptionExpanded ? (
               <>
                 <RenderHTML
-                  contentWidth={CARD_WIDTH}
+                  contentWidth={Math.max(1, cardWidth - 32)}
                   source={{ html: item.description }}
                   tagsStyles={{
                     body: {
@@ -885,12 +986,22 @@ export default function NewsCard({
               title={item.title}
               description={plainDescription}
               titleColor={item.titleColor || "#111111"}
+             
+              titleFontSize={titleFontSize}
+              descriptionFontSize={descriptionFontSize}
               publishedDate={item.publishedDate}
               reporterName={item.reporter?.name}
               isBreaking={item.isBreaking}
               breakingText={item.breakingText}
-              breakingTextColor={item.breakingTextColor}
+              breakingTextColor={
+                item.breakingTextColor &&
+                item.breakingTextColor.toLowerCase() !== "#ffffff" &&
+                item.breakingTextColor.toLowerCase() !== "#fff"
+                  ? item.breakingTextColor
+                  : "#EF4444"
+              }
               logoUrl={settings?.appLogo ? getMediaUrl(settings.appLogo) : undefined}
+              onReady={handleShareCaptureReady}
             />
           </View>
         </View>
@@ -908,7 +1019,7 @@ export default function NewsCard({
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 18,
+    marginBottom: 10,
     borderRadius: 24,
     overflow: "hidden",
     backgroundColor: "#fff",
@@ -925,9 +1036,25 @@ const styles = StyleSheet.create({
       web: { boxShadow: "0 12px 28px rgba(14,165,233,0.14)" },
     }),
   },
-  imageWrap: { position: "relative", backgroundColor: "#F8FAFC" },
-  imageSlide: { width: CARD_WIDTH - 2, backgroundColor: "#F8FAFC" },
-  image: { width: "100%", minHeight: 190, backgroundColor: "#F8FAFC" },
+  imageWrap: {
+    position: "relative",
+    width: "100%",
+    backgroundColor: "#FFFFFF",
+    overflow: "hidden",
+    alignSelf: "stretch",
+  },
+  imageSlide: {
+    flexGrow: 0,
+    flexShrink: 0,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  image: {
+    backgroundColor: "#FFFFFF",
+    transform: [{ scale: 1.015 }],
+  },
   imageDots: {
     position: "absolute",
     bottom: 14,
@@ -1203,9 +1330,10 @@ const styles = StyleSheet.create({
   whatsappButton: { backgroundColor: "#25D366", borderColor: "#25D366" },
   hiddenShareCapture: {
     position: "absolute",
-    left: 0,
+    left: -12000,
     top: 0,
     width: 1080,
-    opacity: 0,
+    opacity: 1,
+    zIndex: -1,
   },
 });
