@@ -1,21 +1,21 @@
 {
   "project_info": {
-    "project_number": "433128612659",
-    "project_id": "brekingapp",
-    "storage_bucket": "brekingapp.firebasestorage.app"
+    "project_number": "341219324426",
+    "project_id": "inminut-caa6f",
+    "storage_bucket": "inminut-caa6f.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:433128612659:android:9d31be354ee7e962cf5446",
+        "mobilesdk_app_id": "1:341219324426:android:2936c0d37d5ca0704da5f3",
         "android_client_info": {
-          "package_name": "com.news.brekingapp"
+          "package_name": "com.inminut"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyAlV4Ag-esrnuulofVzwqVjOb4ILZIbUpU"
+          "current_key": "AIzaSyClUQ_M25cJZBhOMeNGQRpyk2jGrQEST2o"
         }
       ],
       "services": {

@@ -40,7 +40,7 @@ export default ({ config }) => ({
     edgeToEdgeEnabled: false,
     softwareKeyboardLayoutMode: "resize",
     predictiveBackGestureEnabled: false,
-    package: "com.news.brekingapp",
+   package: "com.inminut",
     googleServicesFile: "./google-services.json",
     permissions: ["NOTIFICATIONS", "RECEIVE_BOOT_COMPLETED", "VIBRATE"],
     blockedPermissions: [
