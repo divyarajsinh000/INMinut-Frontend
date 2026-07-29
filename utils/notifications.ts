@@ -3,10 +3,10 @@ import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import { router } from 'expo-router';
 import { logger } from '@/utils/logger';
 import { api } from '@/api';
 import uuid from 'react-native-uuid';
-const NOTIFICATIONS_ENABLED_KEY = 'notifications_enabled';
 const GUEST_ID_KEY = 'guest_id';
 const DEVICE_ID_KEY = 'device_id';
 const CITY_PREFERENCES_KEY = 'city_preferences';
@@ -50,22 +50,45 @@ export const getOrCreateGuestId = async () => {
   return expectedGuestId;
 };
 
-export const getNotificationsEnabled = async () => {
-  const value = await SecureStore.getItemAsync(NOTIFICATIONS_ENABLED_KEY);
+let lastHandledNotificationIdentifier: string | null = null;
 
-  if (value === null) {
-    return true;
+const openNotificationNews = (
+  response: Notifications.NotificationResponse | null | undefined
+) => {
+  if (!response) return;
+
+  const identifier = response.notification.request.identifier;
+  if (identifier && lastHandledNotificationIdentifier === identifier) return;
+
+  const data = response.notification.request.content.data as {
+    type?: unknown;
+    newsId?: unknown;
+  };
+
+  const newsId = typeof data?.newsId === 'string' ? data.newsId.trim() : '';
+  const type = typeof data?.type === 'string' ? data.type : '';
+
+  logger('Notification clicked:', data);
+
+  if (type !== 'news' || !newsId) {
+    logger('Notification does not contain a valid newsId.');
+    return;
   }
 
-  return value === 'true';
+  lastHandledNotificationIdentifier = identifier || newsId;
+
+  // Open Home and pass the exact news ID. Home fetches /api/news/:id.
+  setTimeout(() => {
+    router.replace({
+      pathname: '/(tabs)',
+      params: { newsId },
+    });
+  }, 100);
 };
 
 export const setupNotificationResponseListener = () => {
   const responseSubscription =
-    Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data;
-      logger('Notification clicked:', data);
-    });
+    Notifications.addNotificationResponseReceivedListener(openNotificationNews);
 
   const receivedSubscription =
     Notifications.addNotificationReceivedListener((notification) => {
@@ -74,6 +97,11 @@ export const setupNotificationResponseListener = () => {
         JSON.stringify(notification, null, 2)
       );
     });
+
+  // Handles a notification that launched the app from a fully closed state.
+  Notifications.getLastNotificationResponseAsync()
+    .then(openNotificationNews)
+    .catch((error) => logger('Unable to read last notification response:', error));
 
   return {
     remove: () => {
@@ -103,26 +131,6 @@ export const setupAndroidNotificationChannel = async () => {
   });
 };
 
-export const saveNotificationsEnabled = async (enabled: boolean) => {
-  await SecureStore.setItemAsync(NOTIFICATIONS_ENABLED_KEY, String(enabled));
-
-  const guestId = await getOrCreateGuestId();
-  const deviceId = await getOrCreateDeviceId();
-
-  try {
-    await api.updateGuestNotificationPreference(guestId, enabled, deviceId);
-  } catch (error: any) {
-    logger('updateGuestNotificationPreference error:', {
-      guestId,
-      deviceId,
-      enabled,
-      message: error?.message,
-      status: error?.response?.status,
-      data: error?.response?.data,
-    });
-  }
-};
-
 export const registerGuestForPushNotifications = async () => {
   try {
     await setupAndroidNotificationChannel();
@@ -145,19 +153,6 @@ export const registerGuestForPushNotifications = async () => {
 
     if (finalStatus !== 'granted') {
       logger('Notification permission not granted.');
-      await SecureStore.setItemAsync(NOTIFICATIONS_ENABLED_KEY, 'false');
-
-      try {
-        await api.updateGuestNotificationPreference(guestId, false, deviceId);
-      } catch (error: any) {
-        logger('permission denied preference update skipped:', {
-          guestId,
-          deviceId,
-          status: error?.response?.status,
-          data: error?.response?.data,
-        });
-      }
-
       return null;
     }
 
@@ -198,7 +193,6 @@ export const registerGuestForPushNotifications = async () => {
       platform: Platform.OS,
       deviceName: Device.deviceName || undefined,
       appVersion: Constants.expoConfig?.version,
-      notificationsEnabled: true,
       cityPreferences: Array.isArray(cityPreferences) ? cityPreferences : [],
     });
 
@@ -215,8 +209,6 @@ export const registerGuestForPushNotifications = async () => {
       devicesCount: Array.isArray(registeredGuest?.devices) ? registeredGuest.devices.length : 0,
       notificationsEnabled: registeredGuest?.notificationsEnabled,
     });
-
-    await SecureStore.setItemAsync(NOTIFICATIONS_ENABLED_KEY, 'true');
 
     return expoPushToken;
   } catch (error: any) {

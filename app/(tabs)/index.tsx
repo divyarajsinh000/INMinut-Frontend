@@ -2,6 +2,7 @@ import { View, FlatList, StyleSheet, RefreshControl, Text, Pressable, Image } fr
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Image as ExpoImage } from 'expo-image';
+import { router, useLocalSearchParams } from 'expo-router';
 
 import NewsCard from '@/components/NewsCard';
 import AdCard from '@/components/AdCard';
@@ -11,7 +12,7 @@ import CityPreferenceModal from '@/components/CityPreferenceModal';
 import OnboardingSlider, { hasCompletedOnboarding } from '@/components/OnboardingSlider';
 import AppGuideOverlay, { hasCompletedAppGuide } from '@/components/AppGuideOverlay';
 import { useAppStore } from '@/store';
-import { Ad, NewsItem, EmbedItem } from '@/api';
+import { Ad, NewsItem, EmbedItem, api } from '@/api';
 import { AppPalette } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from '@/utils/storage';
@@ -32,6 +33,8 @@ const hasRenderableNews = (item: NewsItem) => {
 };
 
 export default function HomeScreen() {
+  const params = useLocalSearchParams<{ newsId?: string | string[] }>();
+  const notificationNewsId = Array.isArray(params.newsId) ? params.newsId[0] : params.newsId;
   const {
     news,
     categories,
@@ -72,11 +75,16 @@ export default function HomeScreen() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showAppGuide, setShowAppGuide] = useState(false);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
+  const [isRefreshingAll, setIsRefreshingAll] = useState(false);
+  const [notificationNews, setNotificationNews] = useState<NewsItem | null>(null);
+  const [isLoadingNotificationNews, setIsLoadingNotificationNews] = useState(false);
+  const [notificationNewsError, setNotificationNewsError] = useState<string | null>(null);
   
   const [guideLayouts, setGuideLayouts] = useState<Record<string, any>>({});
   const cityButtonRef = useRef<View>(null);
   const helpButtonRef = useRef<View>(null);
   const categoryRowRef = useRef<View>(null);
+  const refreshInProgressRef = useRef(false);
 
   const viewedNewsIdsRef = useRef<Set<string>>(new Set());
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
@@ -91,37 +99,60 @@ export default function HomeScreen() {
   }).current;
 
   const loadData = useCallback(async () => {
-    const [savedCityIds, onboardingDone, cityPreferenceSetupDone, appGuideDone] = await Promise.all([
-      loadCityPreferences(),
-      hasCompletedOnboarding(),
-      SecureStore.getItemAsync(CITY_PREFERENCE_SETUP_KEY),
-      hasCompletedAppGuide(),
-    ]);
+    if (refreshInProgressRef.current) return;
 
-    await Promise.all([
-      fetchCategories(), 
-      fetchAdvertisements(), 
-      fetchEmbeds(), 
-      fetchCities(), 
-      fetchSettings(),
-      loadSavedNews(),
-      loadLikedNews()
-    ]);
+    refreshInProgressRef.current = true;
+    setIsRefreshingAll(true);
 
-    if (!onboardingDone) {
-      setShowOnboarding(true);
-    } else if (!cityPreferenceSetupDone) {
-      setShowCityModal(true);
-    } else if (!appGuideDone) {
-      setShowAppGuide(true);
+    try {
+      const [savedCityIds, onboardingDone, cityPreferenceSetupDone, appGuideDone] = await Promise.all([
+        loadCityPreferences(),
+        hasCompletedOnboarding(),
+        SecureStore.getItemAsync(CITY_PREFERENCE_SETUP_KEY),
+        hasCompletedAppGuide(),
+      ]);
+
+      await Promise.all([
+        fetchCategories(),
+        fetchAdvertisements(),
+        fetchEmbeds(),
+        fetchCities(),
+        fetchSettings(),
+        loadSavedNews(),
+        loadLikedNews(),
+      ]);
+
+      if (!onboardingDone) {
+        setShowOnboarding(true);
+      } else if (!cityPreferenceSetupDone) {
+        setShowCityModal(true);
+      } else if (!appGuideDone) {
+        setShowAppGuide(true);
+      }
+
+      await fetchNews({
+        category: selectedCategory || undefined,
+        cityIds: savedCityIds,
+      });
+
+      viewedNewsIdsRef.current.clear();
+      setPreferencesLoaded(true);
+    } finally {
+      refreshInProgressRef.current = false;
+      setIsRefreshingAll(false);
     }
-
-    await fetchNews({
-      category: selectedCategory || undefined,
-      cityIds: savedCityIds,
-    });
-    setPreferencesLoaded(true);
-  }, [fetchCategories, fetchAdvertisements, fetchCities, fetchNews, selectedCategory, loadCityPreferences, loadSavedNews, loadLikedNews]);
+  }, [
+    fetchAdvertisements,
+    fetchCategories,
+    fetchCities,
+    fetchEmbeds,
+    fetchNews,
+    fetchSettings,
+    loadCityPreferences,
+    loadLikedNews,
+    loadSavedNews,
+    selectedCategory,
+  ]);
 
   
   useEffect(() => {
@@ -135,6 +166,50 @@ export default function HomeScreen() {
       cityIds: selectedCityPreferences,
     });
   }, [selectedCategory, selectedCityPreferences, preferencesLoaded, fetchNews]);
+
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadNotificationNews = async () => {
+      if (!notificationNewsId) {
+        setNotificationNews(null);
+        setNotificationNewsError(null);
+        return;
+      }
+
+      setIsLoadingNotificationNews(true);
+      setNotificationNewsError(null);
+
+      try {
+        const selectedNews = await api.getNewsById(notificationNewsId);
+        if (!cancelled) {
+          setNotificationNews(selectedNews);
+          viewedNewsIdsRef.current.delete(selectedNews._id);
+        }
+      } catch (notificationError) {
+        console.error('Fetch notification news error:', notificationError);
+        if (!cancelled) {
+          setNotificationNews(null);
+          setNotificationNewsError('This news could not be opened. It may have been removed.');
+        }
+      } finally {
+        if (!cancelled) setIsLoadingNotificationNews(false);
+      }
+    };
+
+    loadNotificationNews();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [notificationNewsId]);
+
+  const closeNotificationNews = useCallback(() => {
+    setNotificationNews(null);
+    setNotificationNewsError(null);
+    router.replace('/(tabs)');
+  }, []);
 
   const measureGuideTargets = useCallback(() => {
     cityButtonRef.current?.measureInWindow((x, y, width, height) => {
@@ -219,6 +294,10 @@ export default function HomeScreen() {
     });
   });
 
+  const displayedFeedItems: FeedItem[] = notificationNews
+    ? [{ type: 'news', data: notificationNews }]
+    : feedItems;
+
   const selectedCityCount = selectedCityPreferences.length;
   const selectedCityLabel = selectedCityCount === 0
     ? 'All cities'
@@ -241,11 +320,22 @@ export default function HomeScreen() {
       <View style={[styles.container, { backgroundColor: themeStyles.bg }]}>
         <View style={[styles.hero, { backgroundColor: themeStyles.bg }]}>
           <View style={styles.heroTopRow}>
-            <View style={styles.logoBox}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.logoBox,
+                pressed && styles.logoPressed,
+              ]}
+              onPress={loadData}
+              disabled={isRefreshingAll}
+              accessibilityRole="button"
+              accessibilityLabel="Refresh all app data"
+              accessibilityHint="Reloads news, categories, advertisements, embeds, cities and settings"
+              hitSlop={6}
+            >
               <View style={styles.logoImageWrap}>
                 <ExpoImage
                   source={
-                    settings?.appLogo 
+                    settings?.appLogo
                       ? { uri: getMediaUrl(settings.appLogo) }
                       : require('../../assets/images/logo.png')
                   }
@@ -255,7 +345,7 @@ export default function HomeScreen() {
                   transition={200}
                 />
               </View>
-            </View>
+            </Pressable>
 
             <View style={styles.headerActions}>
               <Pressable ref={helpButtonRef} style={[styles.helpButton, { backgroundColor: themeStyles.card, borderColor: themeStyles.border }]} onPress={() => setShowAppGuide(true)} hitSlop={8}>
@@ -275,13 +365,36 @@ export default function HomeScreen() {
           <CategoryFilter categories={categories} selectedCategoryId={selectedCategory} onSelectCategory={setSelectedCategory} />
         </View>
 
-        {isLoading && news.length === 0 ? (
+        {!!notificationNewsId && (
+          <View style={[styles.notificationNewsBar, { backgroundColor: themeStyles.card, borderColor: themeStyles.border }]}>
+            <View style={styles.notificationNewsBarTextWrap}>
+              <Ionicons name="notifications" size={17} color={AppPalette.brightOrange} />
+              <Text style={[styles.notificationNewsBarText, { color: themeStyles.text }]} numberOfLines={1}>
+                News opened from notification
+              </Text>
+            </View>
+            <Pressable onPress={closeNotificationNews} hitSlop={8} style={styles.showAllButton}>
+              <Text style={styles.showAllButtonText}>Show all</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {isLoadingNotificationNews ? (
+          <Text style={[styles.stateText, { color: themeStyles.textSecondary }]}>Opening selected news...</Text>
+        ) : notificationNewsError ? (
+          <View style={styles.notificationErrorWrap}>
+            <Text style={styles.errorText}>{notificationNewsError}</Text>
+            <Pressable style={styles.backToFeedButton} onPress={closeNotificationNews}>
+              <Text style={styles.backToFeedButtonText}>Back to all news</Text>
+            </Pressable>
+          </View>
+        ) : isLoading && news.length === 0 ? (
           <Text style={[styles.stateText, { color: themeStyles.textSecondary }]}>Loading fresh stories...</Text>
         ) : error ? (
           <Text style={styles.errorText}>{error}</Text>
         ) : (
           <FlatList
-            data={feedItems}
+            data={displayedFeedItems}
             renderItem={renderItem}
             keyExtractor={(item) => item.type === 'news' ? item.data._id : item.key}
             contentContainerStyle={styles.listContainer}
@@ -291,7 +404,7 @@ export default function HomeScreen() {
             ListEmptyComponent={<Text style={styles.stateText}>No news found for selected filters.</Text>}
             onViewableItemsChanged={onViewableItemsChanged}
             viewabilityConfig={viewabilityConfig}
-            refreshControl={<RefreshControl refreshing={isLoading} onRefresh={loadData} tintColor={AppPalette.brightOrange} />}
+            refreshControl={<RefreshControl refreshing={isRefreshingAll} onRefresh={loadData} tintColor={AppPalette.brightOrange} />}
           />
         )}
 
@@ -378,6 +491,10 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
 
+  logoPressed: {
+    opacity: 0.65,
+  },
+
   logoImageWrap: {
     flex: 1,
     height: '100%',
@@ -447,6 +564,37 @@ const styles = StyleSheet.create({
   filterWrapper: { height: 42 },
   newsList: { flex: 1 },
   listContainer: { padding: 16, paddingTop: 6, paddingBottom: 120 },
+  notificationNewsBar: {
+    minHeight: 42,
+    marginHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 4,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  notificationNewsBarTextWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  notificationNewsBarText: { flex: 1, fontSize: 12, fontWeight: '800' },
+  showAllButton: { paddingVertical: 8, paddingLeft: 8 },
+  showAllButtonText: { color: AppPalette.brightOrange, fontSize: 12, fontWeight: '900' },
+  notificationErrorWrap: { alignItems: 'center', paddingHorizontal: 20 },
+  backToFeedButton: {
+    marginTop: 16,
+    borderRadius: 999,
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+    backgroundColor: AppPalette.brightOrange,
+  },
+  backToFeedButtonText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
   stateText: { textAlign: 'center', marginTop: 50, color: AppPalette.slate, fontWeight: '800' },
   errorText: { textAlign: 'center', marginTop: 50, color: AppPalette.danger, fontWeight: '800' },
 });

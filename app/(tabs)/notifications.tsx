@@ -5,30 +5,18 @@ import { Ionicons } from '@expo/vector-icons';
 import CityPreferenceModal from '@/components/CityPreferenceModal';
 import { AppPalette } from '@/constants/theme';
 import { useAppStore } from '@/store';
-import {
-  getNotificationsEnabled,
-  registerGuestForPushNotifications,
-  saveNotificationsEnabled,
-} from '@/utils/notifications';
 
 const CONTACT_EMAIL = 'inminut@gmail.com';
 
 export default function NotificationsScreen() {
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [showCityModal, setShowCityModal] = useState(false);
   const { cities, selectedCityPreferences, fetchCities, loadCityPreferences, saveCityPreferences, theme, setTheme } = useAppStore();
 
   useEffect(() => {
-    getNotificationsEnabled().then(setNotificationsEnabled);
     fetchCities();
     loadCityPreferences();
   }, [fetchCities, loadCityPreferences]);
 
-  const handleNotificationToggle = async (enabled: boolean) => {
-    setNotificationsEnabled(enabled);
-    await saveNotificationsEnabled(enabled);
-    if (enabled) await registerGuestForPushNotifications();
-  };
 
   const isDark = theme === 'dark';
 
@@ -52,18 +40,9 @@ export default function NotificationsScreen() {
     <SafeAreaView style={[styles.safeArea, { backgroundColor: themeStyles.bg }]}>
       <View style={[styles.container, { backgroundColor: themeStyles.bg }]}>
         <Text style={[styles.title, { color: themeStyles.text }]}>Profile</Text>
-        <Text style={[styles.subtitle, { color: themeStyles.textSecondary }]}>Manage alerts, local preferences and support details.</Text>
+        <Text style={[styles.subtitle, { color: themeStyles.textSecondary }]}>Manage local preferences and support details.</Text>
 
-        <View style={[styles.settingCard, { backgroundColor: themeStyles.card, borderColor: themeStyles.border }]}>
-          <View style={[styles.settingIcon, { backgroundColor: themeStyles.iconBg }]}>
-            <Ionicons name="notifications-outline" size={22} color={AppPalette.brightOrange} />
-          </View>
-          <View style={styles.settingTextWrap}>
-            <Text style={[styles.settingTitle, { color: themeStyles.text }]}>Push notifications</Text>
-            <Text style={[styles.settingSub, { color: themeStyles.textSecondary }]}>Receive alerts for your selected cities.</Text>
-          </View>
-          <Switch value={notificationsEnabled} onValueChange={handleNotificationToggle} thumbColor={notificationsEnabled ? AppPalette.brightOrange : undefined} />
-        </View>
+        
 
         <View style={[styles.settingCard, { backgroundColor: themeStyles.card, borderColor: themeStyles.border }]}>
           <View style={[styles.settingIcon, { backgroundColor: themeStyles.iconBg }]}>

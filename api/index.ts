@@ -151,7 +151,7 @@ export const api = {
 registerGuestUser: async (payload: RegisterGuestPayload) => {
   logger('API registerGuestUser payload:', payload);
 
-  const response = await apiClient.post('/api/guest-users/register', payload);
+  const response = await apiClient.post('/api/guest-users', payload);
 
   logger('API registerGuestUser response:', response.data);
 
