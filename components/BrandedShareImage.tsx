@@ -160,7 +160,7 @@ export default function BrandedShareImage({
               <Text
                 numberOfLines={1}
                 adjustsFontSizeToFit
-                minimumFontScale={0.72}
+                minimumFontScale={0.62}
                 style={[
                   styles.breakingText,
                   {
@@ -281,28 +281,28 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   cardHeader: {
-    height: 150,
+    height: 184,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 48,
+    paddingHorizontal: 42,
     backgroundColor: "#FFFFFF",
   },
   logoBox: {
-    width: 430,
-    height: 96,
+    width: 470,
+    height: 126,
     alignItems: "flex-start",
     justifyContent: "center",
   },
   logo: {
-    width: 270,
-    height: 82,
+    width: 360,
+    height: 112,
     borderRadius: 14,
   },
   breakingBox: {
-    width: 430,
-    minHeight: 82,
-    alignItems: "flex-end",
+    width: 418,
+    minHeight: 112,
+    alignItems: "center",
     justifyContent: "center",
   },
   logoTitle: {
@@ -313,12 +313,11 @@ const styles = StyleSheet.create({
   breakingText: {
     width: "100%",
     color: "#EF4444",
-    fontSize: 44,
-    lineHeight: 54,
+    fontSize: 54,
+    lineHeight: 66,
     fontWeight: "900",
     letterSpacing: 0.4,
-    textAlign: "right",
-   
+    textAlign: "center",
     includeFontPadding: false,
   },
   imageWrapper: {

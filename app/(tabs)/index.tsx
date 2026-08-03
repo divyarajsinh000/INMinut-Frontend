@@ -23,7 +23,8 @@ const CITY_PREFERENCE_SETUP_KEY = 'city_preference_setup_done';
 type FeedItem =
   | { type: 'news'; data: NewsItem }
   | { type: 'ad'; data: Ad; key: string }
-  | { type: 'embed'; data: EmbedItem; key: string };
+  | { type: 'embed'; data: EmbedItem; key: string }
+  | { type: 'section'; title: string; key: string };
 
 const hasRenderableNews = (item: NewsItem) => {
   if (item.isActive === false) return false;
@@ -84,7 +85,8 @@ export default function HomeScreen() {
   const cityButtonRef = useRef<View>(null);
   const helpButtonRef = useRef<View>(null);
   const categoryRowRef = useRef<View>(null);
-  const refreshInProgressRef = useRef(false);
+    const newsListRef = useRef<FlatList<FeedItem>>(null);
+const refreshInProgressRef = useRef(false);
 
   const viewedNewsIdsRef = useRef<Set<string>>(new Set());
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
@@ -155,6 +157,16 @@ export default function HomeScreen() {
   ]);
 
   
+
+  const handleLogoPress = useCallback(() => {
+    newsListRef.current?.scrollToOffset({
+      offset: 0,
+      animated: true,
+    });
+
+    loadData();
+  }, [loadData]);
+
   useEffect(() => {
     loadData();
   }, [loadData]);
@@ -294,9 +306,20 @@ export default function HomeScreen() {
     });
   });
 
-  const displayedFeedItems: FeedItem[] = notificationNews
-    ? [{ type: 'news', data: notificationNews }]
+  const regularFeedItems = notificationNews
+    ? feedItems.filter(
+        (feedItem) =>
+          feedItem.type !== 'news' || feedItem.data._id !== notificationNews._id,
+      )
     : feedItems;
+
+  const displayedFeedItems: FeedItem[] = notificationNews
+    ? [
+        { type: 'news', data: notificationNews },
+        { type: 'section', title: 'All News', key: 'all-news-section' },
+        ...regularFeedItems,
+      ]
+    : regularFeedItems;
 
   const selectedCityCount = selectedCityPreferences.length;
   const selectedCityLabel = selectedCityCount === 0
@@ -304,6 +327,17 @@ export default function HomeScreen() {
     : `${selectedCityCount} ${selectedCityCount === 1 ? 'city' : 'cities'}`;
 
   const renderItem = ({ item, index }: { item: FeedItem; index: number }) => {
+    if (item.type === 'section') {
+      return (
+        <View style={styles.allNewsSection}>
+          <View style={styles.allNewsLine} />
+          <Text style={[styles.allNewsTitle, { color: themeStyles.text }]}>
+            {item.title}
+          </Text>
+          <View style={styles.allNewsLine} />
+        </View>
+      );
+    }
     if (item.type === 'ad') return <AdCard item={item.data} />;
     if (item.type === 'embed') return <EmbedCard item={item.data} />;
     return (
@@ -325,7 +359,7 @@ export default function HomeScreen() {
                 styles.logoBox,
                 pressed && styles.logoPressed,
               ]}
-              onPress={loadData}
+              onPress={handleLogoPress}
               disabled={isRefreshingAll}
               accessibilityRole="button"
               accessibilityLabel="Refresh all app data"
@@ -394,9 +428,12 @@ export default function HomeScreen() {
           <Text style={styles.errorText}>{error}</Text>
         ) : (
           <FlatList
+            ref={newsListRef}
             data={displayedFeedItems}
             renderItem={renderItem}
-            keyExtractor={(item) => item.type === 'news' ? item.data._id : item.key}
+            keyExtractor={(item) =>
+              item.type === 'news' ? `news-${item.data._id}` : item.key
+            }
             contentContainerStyle={styles.listContainer}
             style={styles.newsList}
             scrollIndicatorInsets={{ bottom: 96 }}
@@ -564,6 +601,25 @@ const styles = StyleSheet.create({
   filterWrapper: { height: 42 },
   newsList: { flex: 1 },
   listContainer: { padding: 16, paddingTop: 6, paddingBottom: 120 },
+  allNewsSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 12,
+    marginBottom: 16,
+    paddingHorizontal: 2,
+  },
+  allNewsLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#FECACA',
+  },
+  allNewsTitle: {
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '900',
+    letterSpacing: -0.2,
+  },
   notificationNewsBar: {
     minHeight: 42,
     marginHorizontal: 16,
