@@ -18,7 +18,7 @@ import { Image } from "expo-image";
 import { useEvent } from "expo";
 import { useVideoPlayer, VideoView } from "expo-video";
 import Pdf from "react-native-pdf";
-import ReactNativeBlobUtil from "react-native-blob-util";
+import * as FileSystem from "expo-file-system/legacy";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "@/constants/theme";
 import { MediaItem } from "@/api";
@@ -335,10 +335,10 @@ function PdfPreviewModal({
   const [localPdfUri, setLocalPdfUri] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!preview) return;
+    if (!preview?.url) return;
 
     let cancelled = false;
-    let downloadedPath: string | null = null;
+    let downloadedUri: string | null = null;
 
     const preparePdf = async () => {
       setLoading(true);
@@ -348,80 +348,57 @@ function PdfPreviewModal({
       setPageInfo({ page: 1, total: 0 });
 
       try {
-        const response = await ReactNativeBlobUtil.config({
-          fileCache: true,
-          appendExt: "pdf",
-        }).fetch("GET", preview.url, {
-          Accept: "application/pdf,application/octet-stream;q=0.9,*/*;q=0.8",
+        if (!FileSystem.cacheDirectory) {
+          throw new Error("App cache directory is not available on this device.");
+        }
+
+        // Do NOT use react-native-blob-util here. In this app that request is the
+        // source of the Android `Download interrupted` error before react-native-pdf
+        // even gets a chance to render the file.
+        const cacheUri = `${FileSystem.cacheDirectory}inminut-pdf-${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2)}.pdf`;
+
+        const result = await FileSystem.downloadAsync(preview.url, cacheUri, {
+          headers: {
+            Accept: "application/pdf,application/octet-stream,*/*",
+          },
         });
 
-        downloadedPath = response.path();
-        const info = response.info();
-        const status = Number(info.status || 0);
-        const headers = info.headers || {};
-        const contentType = String(
-          headers["Content-Type"] ||
-            headers["content-type"] ||
-            "",
-        ).toLowerCase();
+        downloadedUri = result.uri;
 
-        if (status < 200 || status >= 300) {
-          throw new Error(
-            `Server returned HTTP ${status}. Check the PDF media URL and backend route.`,
-          );
+        if (result.status < 200 || result.status >= 300) {
+          throw new Error(`Server returned HTTP ${result.status} while loading PDF.`);
         }
 
-        const fileStat = await ReactNativeBlobUtil.fs.stat(downloadedPath);
-        const fileSize = Number(fileStat.size || 0);
-
-        if (fileSize < 5) {
-          throw new Error("The server returned an empty PDF file.");
-        }
-
-        // Validate the actual file signature instead of trusting the .pdf URL.
-        // A real PDF starts with the bytes: %PDF-
-        const signaturePath = `${ReactNativeBlobUtil.fs.dirs.CacheDir}/inminut-pdf-signature-${Date.now()}.bin`;
-        await ReactNativeBlobUtil.fs.slice(
-          downloadedPath,
-          signaturePath,
-          0,
-          Math.min(8, fileSize),
-        );
-        const signatureBase64 = await ReactNativeBlobUtil.fs.readFile(
-          signaturePath,
-          "base64",
-        );
-        await ReactNativeBlobUtil.fs.unlink(signaturePath).catch(() => undefined);
-
-        const isPdfSignature = signatureBase64.startsWith("JVBERi0");
-
-        if (!isPdfSignature) {
-          const typeHint = contentType
-            ? ` Content-Type received: ${contentType}.`
-            : "";
-          throw new Error(
-            `The URL did not return PDF data.${typeHint} It may be returning HTML, JSON, a login page, or a 404 response.`,
-          );
+        const fileInfo = await FileSystem.getInfoAsync(result.uri, { size: true });
+        if (!fileInfo.exists || !fileInfo.size || fileInfo.size < 5) {
+          throw new Error("The downloaded PDF file is empty.");
         }
 
         if (cancelled) {
-          await ReactNativeBlobUtil.fs.unlink(downloadedPath).catch(() => undefined);
+          await FileSystem.deleteAsync(result.uri, { idempotent: true }).catch(
+            () => undefined,
+          );
           return;
         }
 
-        setLocalPdfUri(`file://${downloadedPath}`);
+        // react-native-pdf accepts a local file:// URI directly.
+        setLocalPdfUri(result.uri);
       } catch (error: any) {
-        console.error("PDF download/validation failed:", error);
+        console.error("PDF download failed:", error);
 
-        if (downloadedPath) {
-          await ReactNativeBlobUtil.fs.unlink(downloadedPath).catch(() => undefined);
+        if (downloadedUri) {
+          await FileSystem.deleteAsync(downloadedUri, { idempotent: true }).catch(
+            () => undefined,
+          );
         }
 
         if (!cancelled) {
           setLoading(false);
           setLoadFailed(true);
           setErrorMessage(
-            error?.message || "Unable to download a valid PDF file.",
+            error?.message || "Unable to download this PDF inside the app.",
           );
         }
       }
@@ -431,8 +408,10 @@ function PdfPreviewModal({
 
     return () => {
       cancelled = true;
-      if (downloadedPath) {
-        ReactNativeBlobUtil.fs.unlink(downloadedPath).catch(() => undefined);
+      if (downloadedUri) {
+        FileSystem.deleteAsync(downloadedUri, { idempotent: true }).catch(
+          () => undefined,
+        );
       }
     };
   }, [preview?.url, reloadKey]);
@@ -508,9 +487,9 @@ function PdfPreviewModal({
               <Text style={styles.pdfErrorText}>{errorMessage}</Text>
 
               <Text style={styles.pdfLocalHint}>
-                For local development, do not use localhost or 127.0.0.1 in the
-                media URL on a physical phone. Use your computer LAN IP, for
-                example http://192.168.1.10:PORT/media/file.pdf.
+                If you are testing on a physical phone with a local backend,
+                make sure the media URL uses your computer LAN IP and not
+                localhost or 127.0.0.1.
               </Text>
 
               <TouchableOpacity
@@ -552,7 +531,7 @@ function PdfPreviewModal({
                     setLoading(false);
                     setLoadFailed(true);
                     setErrorMessage(
-                      "The file was downloaded as a PDF, but the native PDF renderer could not open it.",
+                      "The PDF downloaded successfully, but the native PDF renderer could not open it.",
                     );
                   }}
                 />
@@ -569,9 +548,7 @@ function PdfPreviewModal({
                     size="large"
                     color={Colors.brightOrange}
                   />
-                  <Text style={styles.pdfLoadingText}>
-                    Downloading and validating PDF...
-                  </Text>
+                  <Text style={styles.pdfLoadingText}>Opening PDF...</Text>
                 </View>
               )}
             </>

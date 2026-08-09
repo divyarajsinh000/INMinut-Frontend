@@ -1,7 +1,7 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { Colors } from '@/constants/theme';
@@ -10,6 +10,11 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 export default function TabLayout() {
   const colorScheme = useColorScheme() ?? 'light';
   const active = Colors[colorScheme].tint;
+  const insets = useSafeAreaInsets();
+
+  // Keep the tab buttons above Android gesture / navigation controls.
+  // On devices without a bottom inset we still keep a little visual padding.
+  const bottomSafeSpace = Math.max(insets.bottom, 8);
 
   return (
     <Tabs
@@ -19,10 +24,11 @@ export default function TabLayout() {
           colorScheme === 'dark' ? '#64748B' : '#98A2B3',
         headerShown: false,
         tabBarButton: HapticTab,
+        tabBarHideOnKeyboard: true,
         tabBarStyle: {
-          height: Platform.OS === 'ios' ? 86 : 68,
+          height: 58 + bottomSafeSpace,
           paddingTop: 8,
-          paddingBottom: Platform.OS === 'ios' ? 24 : 10,
+          paddingBottom: bottomSafeSpace,
           borderTopWidth: 0,
           backgroundColor:
             colorScheme === 'dark' ? '#111111' : '#FFFFFF',
@@ -35,6 +41,9 @@ export default function TabLayout() {
             width: 0,
             height: -6,
           },
+        },
+        tabBarItemStyle: {
+          paddingTop: 1,
         },
         tabBarLabelStyle: {
           fontSize: 11,
