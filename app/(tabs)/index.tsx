@@ -3,6 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Image as ExpoImage } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import NewsCard from '@/components/NewsCard';
 import AdCard from '@/components/AdCard';
@@ -69,7 +70,6 @@ export default function HomeScreen() {
     text: isDark ? '#F8FAFC' : '#111111',
     border: isDark ? '#334155' : '#FECACA',
     textSecondary: isDark ? '#94A3B8' : '#475569',
-    helpIcon: isDark ? '#FF6B6B' : AppPalette.deepBlue,
   };
 
   const [showCityModal, setShowCityModal] = useState(false);
@@ -167,6 +167,34 @@ const refreshInProgressRef = useRef(false);
     loadData();
   }, [loadData]);
 
+  const changeCategoryBySwipe = useCallback((direction: 'next' | 'previous') => {
+    // Include the unfiltered feed so users can swipe back to it from the first category.
+    const categoryIds = [null, ...categories.map((category) => category._id)];
+    const currentIndex = categoryIds.indexOf(selectedCategory);
+    const nextIndex = currentIndex + (direction === 'next' ? 1 : -1);
+
+    if (nextIndex < 0 || nextIndex >= categoryIds.length) return;
+
+    setSelectedCategory(categoryIds[nextIndex]);
+    newsListRef.current?.scrollToOffset({ offset: 0, animated: true });
+  }, [categories, selectedCategory, setSelectedCategory]);
+
+  const categorySwipeGesture = Gesture.Pan()
+    // Let the news feed keep handling normal vertical scrolling.
+    .activeOffsetX([-24, 24])
+    .failOffsetY([-24, 24])
+    .onEnd((event) => {
+      const isSwipeLeft = event.translationX < -60 || event.velocityX < -650;
+      const isSwipeRight = event.translationX > 60 || event.velocityX > 650;
+
+      if (isSwipeLeft) {
+        changeCategoryBySwipe('next');
+      } else if (isSwipeRight) {
+        changeCategoryBySwipe('previous');
+      }
+    })
+    .runOnJS(true);
+
   useEffect(() => {
     loadData();
   }, [loadData]);
@@ -223,31 +251,45 @@ const refreshInProgressRef = useRef(false);
     router.replace('/(tabs)');
   }, []);
 
-  const measureGuideTargets = useCallback(() => {
-    cityButtonRef.current?.measureInWindow((x, y, width, height) => {
-      if (width > 0 && height > 0) {
-        setGuideLayouts(prev => ({ ...prev, cityButton: { x, y, width, height } }));
+  const updateGuideLayout = useCallback(
+    (key: 'cityButton' | 'helpButton' | 'categoryRow', refOrEvent: any) => {
+      // If a ref was provided, measure in window to get absolute coordinates.
+      try {
+        if (refOrEvent?.current?.measureInWindow) {
+          refOrEvent.current.measureInWindow((x: number, y: number, width: number, height: number) => {
+            if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(width) || !Number.isFinite(height)) {
+              return;
+            }
+
+            setGuideLayouts((prev) => ({
+              ...prev,
+              [key]: { x, y, width, height },
+            }));
+          });
+          return;
+        }
+
+        // Fallback: accept an onLayout event's local layout if a ref isn't available.
+        const { x, y, width, height } = refOrEvent?.nativeEvent?.layout || {};
+        if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(width) || !Number.isFinite(height)) {
+          return;
+        }
+
+        setGuideLayouts((prev) => ({
+          ...prev,
+          [key]: { x, y, width, height },
+        }));
+      } catch (err) {
+        // noop on measurement errors
       }
-    });
-    helpButtonRef.current?.measureInWindow((x, y, width, height) => {
-      if (width > 0 && height > 0) {
-        setGuideLayouts(prev => ({ ...prev, helpButton: { x, y, width, height } }));
-      }
-    });
-    categoryRowRef.current?.measureInWindow((x, y, width, height) => {
-      if (width > 0 && height > 0) {
-        setGuideLayouts(prev => ({ ...prev, categoryRow: { x, y, width, height } }));
-      }
-    });
-  }, []);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!showAppGuide) return;
-
     setGuideLayouts({});
-    const timers = [250, 650, 1100].map((delay) => setTimeout(measureGuideTargets, delay));
-    return () => timers.forEach(clearTimeout);
-  }, [showAppGuide, measureGuideTargets, news.length, categories.length]);
+  }, [showAppGuide, news.length, categories.length]);
 
   const feedItems: FeedItem[] = [];
   
@@ -321,11 +363,6 @@ const refreshInProgressRef = useRef(false);
       ]
     : regularFeedItems;
 
-  const selectedCityCount = selectedCityPreferences.length;
-  const selectedCityLabel = selectedCityCount === 0
-    ? 'All cities'
-    : `${selectedCityCount} ${selectedCityCount === 1 ? 'city' : 'cities'}`;
-
   const renderItem = ({ item, index }: { item: FeedItem; index: number }) => {
     if (item.type === 'section') {
       return (
@@ -382,20 +419,34 @@ const refreshInProgressRef = useRef(false);
             </Pressable>
 
             <View style={styles.headerActions}>
-              <Pressable ref={helpButtonRef} style={[styles.helpButton, { backgroundColor: themeStyles.card, borderColor: themeStyles.border }]} onPress={() => setShowAppGuide(true)} hitSlop={8}>
-                <Ionicons name="help-circle-outline" size={22} color={themeStyles.helpIcon} />
+              <Pressable
+                ref={helpButtonRef}
+                style={styles.headerIconButton}
+                onPress={() => setShowAppGuide(true)}
+                onLayout={() => updateGuideLayout('helpButton', helpButtonRef)}
+                hitSlop={12}
+              >
+                <Ionicons name="help-circle-outline" size={25} color={AppPalette.brightOrange} />
               </Pressable>
 
-              <Pressable ref={cityButtonRef} style={[styles.cityButton, { backgroundColor: themeStyles.card, borderColor: themeStyles.border }]} onPress={() => setShowCityModal(true)}>
-                <Ionicons name="location-outline" size={17} color={AppPalette.brightOrange} />
-                <Text style={[styles.cityButtonText, { color: themeStyles.text }]} numberOfLines={1}>{selectedCityLabel}</Text>
-                <Ionicons name="chevron-down" size={15} color={themeStyles.textSecondary} />
+              <Pressable
+                ref={cityButtonRef}
+                style={styles.headerIconButton}
+                onPress={() => setShowCityModal(true)}
+                onLayout={() => updateGuideLayout('cityButton', cityButtonRef)}
+                hitSlop={12}
+              >
+                <Ionicons name="location-outline" size={25} color={AppPalette.brightOrange} />
               </Pressable>
             </View>
           </View>
         </View>
 
-        <View ref={categoryRowRef} style={styles.filterWrapper}>
+        <View
+          ref={categoryRowRef}
+          style={styles.filterWrapper}
+          onLayout={() => updateGuideLayout('categoryRow', categoryRowRef)}
+        >
           <CategoryFilter categories={categories} selectedCategoryId={selectedCategory} onSelectCategory={setSelectedCategory} />
         </View>
 
@@ -413,37 +464,41 @@ const refreshInProgressRef = useRef(false);
           </View>
         )}
 
-        {isLoadingNotificationNews ? (
-          <Text style={[styles.stateText, { color: themeStyles.textSecondary }]}>Opening selected news...</Text>
-        ) : notificationNewsError ? (
-          <View style={styles.notificationErrorWrap}>
-            <Text style={styles.errorText}>{notificationNewsError}</Text>
-            <Pressable style={styles.backToFeedButton} onPress={closeNotificationNews}>
-              <Text style={styles.backToFeedButtonText}>Back to all news</Text>
-            </Pressable>
+        <GestureDetector gesture={categorySwipeGesture}>
+          <View style={styles.feedGestureArea}>
+            {isLoadingNotificationNews ? (
+              <Text style={[styles.stateText, { color: themeStyles.textSecondary }]}>Opening selected news...</Text>
+            ) : notificationNewsError ? (
+              <View style={styles.notificationErrorWrap}>
+                <Text style={styles.errorText}>{notificationNewsError}</Text>
+                <Pressable style={styles.backToFeedButton} onPress={closeNotificationNews}>
+                  <Text style={styles.backToFeedButtonText}>Back to all news</Text>
+                </Pressable>
+              </View>
+            ) : isLoading && news.length === 0 ? (
+              <Text style={[styles.stateText, { color: themeStyles.textSecondary }]}>Loading fresh stories...</Text>
+            ) : error ? (
+              <Text style={styles.errorText}>{error}</Text>
+            ) : (
+              <FlatList
+                ref={newsListRef}
+                data={displayedFeedItems}
+                renderItem={renderItem}
+                keyExtractor={(item) =>
+                  item.type === 'news' ? `news-${item.data._id}` : item.key
+                }
+                contentContainerStyle={styles.listContainer}
+                style={styles.newsList}
+                scrollIndicatorInsets={{ bottom: 96 }}
+                showsVerticalScrollIndicator={false}
+                ListEmptyComponent={<Text style={styles.stateText}>No news found for selected filters.</Text>}
+                onViewableItemsChanged={onViewableItemsChanged}
+                viewabilityConfig={viewabilityConfig}
+                refreshControl={<RefreshControl refreshing={isRefreshingAll} onRefresh={loadData} tintColor={AppPalette.brightOrange} />}
+              />
+            )}
           </View>
-        ) : isLoading && news.length === 0 ? (
-          <Text style={[styles.stateText, { color: themeStyles.textSecondary }]}>Loading fresh stories...</Text>
-        ) : error ? (
-          <Text style={styles.errorText}>{error}</Text>
-        ) : (
-          <FlatList
-            ref={newsListRef}
-            data={displayedFeedItems}
-            renderItem={renderItem}
-            keyExtractor={(item) =>
-              item.type === 'news' ? `news-${item.data._id}` : item.key
-            }
-            contentContainerStyle={styles.listContainer}
-            style={styles.newsList}
-            scrollIndicatorInsets={{ bottom: 96 }}
-            showsVerticalScrollIndicator={false}
-            ListEmptyComponent={<Text style={styles.stateText}>No news found for selected filters.</Text>}
-            onViewableItemsChanged={onViewableItemsChanged}
-            viewabilityConfig={viewabilityConfig}
-            refreshControl={<RefreshControl refreshing={isRefreshingAll} onRefresh={loadData} tintColor={AppPalette.brightOrange} />}
-          />
-        )}
+        </GestureDetector>
 
         <OnboardingSlider
           visible={showOnboarding}
@@ -509,16 +564,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: 8,
   },
-  helpButton: {
-    height: 42,
-    width: 42,
-    borderRadius: 21,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   logoBox: {
     flex: 1,
     height: 56,
@@ -566,25 +611,9 @@ const styles = StyleSheet.create({
     lineHeight: 15,
     fontWeight: '800',
   },
-  cityButton: {
-    maxWidth: 118,
-    height: 42,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    flexShrink: 1,
-    flexDirection: 'row',
+  headerIconButton: {
     alignItems: 'center',
-    gap: 5,
-  },
-  cityButtonText: {
-    flex: 1,
-    color: AppPalette.ink,
-    fontSize: 12,
-    fontWeight: '900',
+    justifyContent: 'center',
   },
   eyebrow: {
     fontSize: 13,
@@ -599,6 +628,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.6,
   },
   filterWrapper: { height: 42 },
+  feedGestureArea: { flex: 1 },
   newsList: { flex: 1 },
   listContainer: { padding: 16, paddingTop: 6, paddingBottom: 120 },
   allNewsSection: {

@@ -24,8 +24,8 @@ import { useAppStore } from "@/store";
 import RenderHTML from "react-native-render-html";
 import FullScreenImageViewer from "@/components/FullScreenImageViewer";
 import MediaDisplay from "@/components/MediaDisplay";
-import { shareNewsDirect } from "@/utils/share";
-import { getImageMedia, getMediaUrl } from "@/utils/media";
+import { shareNewsDirect, shareSingleMediaFile } from "@/utils/share";
+import { getImageMedia, getMediaUrl, isGifMedia } from "@/utils/media";
 import { captureRef } from "react-native-view-shot";
 let Share: any;
 if (Platform.OS !== "web") {
@@ -243,6 +243,39 @@ export default function NewsCard({
     return lineTexts.join("") + truncatedFifth;
   })();
 
+  const collapsedDescriptionSegments = (() => {
+    const html = item.description || "";
+    const linkMatches = [...html.matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/gi)];
+    if (!linkMatches.length) {
+      return [{ text: displayText, isLink: false }];
+    }
+
+    const visibleText = displayText.replace(/\s+/g, " ").trim();
+    const segments: Array<{ text: string; isLink: boolean }> = [];
+    let cursor = 0;
+
+    for (const match of linkMatches) {
+      const linkText = stripHtml(match[1]).replace(/\s+/g, " ").trim();
+      if (!linkText) continue;
+
+      const index = visibleText.indexOf(linkText, cursor);
+      if (index === -1) continue;
+
+      const before = visibleText.slice(cursor, index);
+      if (before) segments.push({ text: before, isLink: false });
+
+      segments.push({ text: linkText, isLink: true });
+      cursor = index + linkText.length;
+    }
+
+    const trailing = visibleText.slice(cursor).trim();
+    if (trailing) segments.push({ text: trailing, isLink: false });
+
+    return segments.length > 0
+      ? segments
+      : [{ text: visibleText, isLink: false }];
+  })();
+
   const getImageHeight = (media?: MediaItem) => {
     const url = media?.url || "";
     const ratio = imageRatios[url];
@@ -328,8 +361,16 @@ export default function NewsCard({
       return;
     }
     const hasImage = images.length > 0;
+    const firstImage = images[0];
+
+    // View-shot cannot consistently capture animated GIF frames on Android,
+    // which creates a blank white shared image. Share the original GIF file.
+    if (firstImage && isGifMedia(firstImage)) {
+      return shareSingleMediaFile(firstImage, item.title || "Share GIF");
+    }
+
     const firstImageUrl = hasImage
-      ? getMediaUrl(images[0]?.url)
+      ? getMediaUrl(firstImage?.url)
       : settings?.defaultShareImage
         ? getMediaUrl(settings.defaultShareImage)
         : "breaking_placeholder";
@@ -369,13 +410,21 @@ export default function NewsCard({
     return Share.open({
       url: imageUrl,
       type: "image/jpeg",
-      message: PLAY_STORE_LINK,
+      message: buildShareMessage(),
       title: item.title || "Share INMinut news",
       failOnCancel: false,
     });
   };
 
-  const buildWhatsAppMessage = () => PLAY_STORE_LINK;
+  const buildShareMessage = () => {
+    const newsLink = titleLink || `inminut://news/${item._id}`;
+    const lines: string[] = [];
+    if (newsLink) lines.push(`view news : ${newsLink}`);
+    lines.push(`download app : ${PLAY_STORE_LINK}`);
+    return lines.join('\n');
+  };
+
+  const buildWhatsAppMessage = () => buildShareMessage();
 
   const handleWhatsAppShare = async () => {
     if (Platform.OS === "web") {
@@ -386,6 +435,14 @@ export default function NewsCard({
 
     try {
       setWhatsappSharing(true);
+
+      const firstImage = images[0];
+      if (firstImage && isGifMedia(firstImage)) {
+        // Preserve the animation instead of creating a blank JPG capture.
+        const shared = await shareSingleMediaFile(firstImage, item.title || "Share GIF");
+        if (shared !== false) await trackNewsShare(item._id);
+        return;
+      }
 
       const firstImageUrl =
         images.length > 0
@@ -789,6 +846,12 @@ export default function NewsCard({
                       marginTop: 0,
                       marginBottom: 4,
                     },
+                    a: {
+                      color: AppPalette.brightOrange,
+                      textDecorationLine: "underline",
+                      textDecorationColor: AppPalette.brightOrange,
+                      fontWeight: "700",
+                    },
                   }}
                 />
                 <TouchableOpacity
@@ -821,7 +884,21 @@ export default function NewsCard({
                   ]}
                   onTextLayout={handleTextLayout}
                 >
-                  {displayText}
+                  {collapsedDescriptionSegments.map((segment, index) => (
+                    <Text
+                      key={`${segment.text}-${index}`}
+                      style={
+                        segment.isLink
+                          ? [
+                              styles.descriptionInlineLink,
+                              isDark && { color: AppPalette.brightOrange },
+                            ]
+                          : undefined
+                      }
+                    >
+                      {segment.text}
+                    </Text>
+                  ))}
                   {renderedLines.length > 5 && (
                     <Text style={styles.inlineReadMore}> ... Read more</Text>
                   )}
@@ -876,6 +953,54 @@ export default function NewsCard({
             style={styles.actionsContainer}
           >
             <TouchableOpacity
+              onPress={() => toggleLikedNews(item._id)}
+              style={[
+                styles.actionButton,
+                isDark && {
+                  backgroundColor: "#334155",
+                  borderColor: "#475569",
+                },
+              ]}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name={isLiked ? "heart" : "heart-outline"}
+                size={19}
+                color={
+                  isLiked
+                    ? "#EF4444"
+                    : isDark
+                      ? "#F8FAFC"
+                      : AppPalette.ink
+                }
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => toggleSavedNews(item._id)}
+              style={[
+                styles.actionButton,
+                isDark && {
+                  backgroundColor: "#334155",
+                  borderColor: "#475569",
+                },
+              ]}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name={isSaved ? "bookmark" : "bookmark-outline"}
+                size={19}
+                color={
+                  isSaved
+                    ? Colors.brightOrange
+                    : isDark
+                      ? "#F8FAFC"
+                      : AppPalette.ink
+                }
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
               onPress={handleWhatsAppShare}
               style={[styles.actionButton, styles.whatsappButton]}
               activeOpacity={0.8}
@@ -916,52 +1041,6 @@ export default function NewsCard({
                   color={isDark ? "#F8FAFC" : AppPalette.ink}
                 />
               )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => toggleSavedNews(item._id)}
-              style={[
-                styles.actionButton,
-                isDark && {
-                  backgroundColor: "#334155",
-                  borderColor: "#475569",
-                },
-              ]}
-              activeOpacity={0.8}
-            >
-              <Ionicons
-                name={isSaved ? "bookmark" : "bookmark-outline"}
-                size={19}
-                color={
-                  isSaved
-                    ? Colors.brightOrange
-                    : isDark
-                      ? "#F8FAFC"
-                      : AppPalette.ink
-                }
-              />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => toggleLikedNews(item._id)}
-              style={[
-                styles.actionButton,
-                isDark && {
-                  backgroundColor: "#334155",
-                  borderColor: "#475569",
-                },
-              ]}
-              activeOpacity={0.8}
-            >
-              <Ionicons
-                name={isLiked ? "heart" : "heart-outline"}
-                size={19}
-                color={
-                  isLiked
-                    ? "#EF4444" // red color for like
-                    : isDark
-                      ? "#F8FAFC"
-                      : AppPalette.ink
-                }
-              />
             </TouchableOpacity>
           </View>
         </View>
@@ -1203,6 +1282,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 21,
     color: AppPalette.slate,
+  },
+  descriptionInlineLink: {
+    color: AppPalette.brightOrange,
+    textDecorationLine: "underline",
+    textDecorationColor: AppPalette.brightOrange,
+    fontWeight: "700",
   },
   descriptionWrap: {
     marginBottom: 12,

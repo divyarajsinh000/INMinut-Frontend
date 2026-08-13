@@ -1,4 +1,4 @@
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { AppPalette } from '@/constants/theme';
@@ -6,15 +6,23 @@ import { AppPalette } from '@/constants/theme';
 const CONTACT_EMAIL = 'inminut@gmail.com';
 const CONTACT_PHONE = '+91 99999 99999';
 const CONTACT_PHONE_DIAL = '+919999999999';
+const INSTAGRAM_URL = 'https://www.instagram.com/inminut_app/';
+const FACEBOOK_URL = 'https://www.facebook.com/INMinut/';
+const YOUTUBE_URL = 'https://www.youtube.com/@INMinut';
+const X_URL = 'https://x.com/INMinut_app';
 
 export default function ContactScreen() {
   const openEmail = () => Linking.openURL(`mailto:${CONTACT_EMAIL}?subject=INMinut App Support`);
   const callPhone = () => Linking.openURL(`tel:${CONTACT_PHONE_DIAL}`);
   const openWhatsApp = () => Linking.openURL(`https://wa.me/${CONTACT_PHONE_DIAL.replace('+', '')}`);
+  const openInstagram = () => Linking.openURL(INSTAGRAM_URL);
+  const openFacebook = () => Linking.openURL(FACEBOOK_URL);
+  const openYoutube = () => Linking.openURL(YOUTUBE_URL);
+  const openX = () => Linking.openURL(X_URL);
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
+      <ScrollView contentContainerStyle={[styles.container, { paddingBottom: 120 }]} showsVerticalScrollIndicator>
         <View style={styles.headerCard}>
           <View style={styles.headerIcon}>
             <Ionicons name="headset-outline" size={34} color="#fff" />
@@ -55,7 +63,52 @@ export default function ContactScreen() {
           </View>
           <Ionicons name="chevron-forward" size={22} color={AppPalette.muted} />
         </Pressable>
-      </View>
+
+        <Pressable style={styles.contactCard} onPress={openInstagram}>
+          <View style={styles.iconBox}>
+            <Ionicons name="logo-instagram" size={24} color={AppPalette.brightOrange} />
+          </View>
+          <View style={styles.textWrap}>
+            <Text style={styles.label}>Instagram</Text>
+            <Text style={styles.value}>{'@inminut_app'}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={22} color={AppPalette.muted} />
+        </Pressable>
+
+        <Pressable style={styles.contactCard} onPress={openFacebook}>
+          <View style={styles.iconBox}>
+            <Ionicons name="logo-facebook" size={24} color={AppPalette.brightOrange} />
+          </View>
+          <View style={styles.textWrap}>
+            <Text style={styles.label}>Facebook</Text>
+            <Text style={styles.value}>{'INMinut'}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={22} color={AppPalette.muted} />
+        </Pressable>
+
+        <Pressable style={styles.contactCard} onPress={openYoutube}>
+          <View style={styles.iconBox}>
+            <Ionicons name="logo-youtube" size={24} color={AppPalette.brightOrange} />
+          </View>
+          <View style={styles.textWrap}>
+            <Text style={styles.label}>YouTube</Text>
+            <Text style={styles.value}>{'INMinut'}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={22} color={AppPalette.muted} />
+        </Pressable>
+
+        <Pressable style={styles.contactCard} onPress={openX}>
+          <View style={styles.iconBox}>
+            <Ionicons name="logo-twitter" size={24} color={AppPalette.brightOrange} />
+          </View>
+          <View style={styles.textWrap}>
+            <Text style={styles.label}>X</Text>
+            <Text style={styles.value}>{'@INMinut_app'}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={22} color={AppPalette.muted} />
+        </Pressable>
+
+      </ScrollView>
     </SafeAreaView>
   );
 }

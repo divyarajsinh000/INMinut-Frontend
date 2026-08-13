@@ -96,6 +96,7 @@ export interface Category {
   name: string;
   backgroundColor?: string;
   textColor?: string;
+  isHighlighted?: boolean;
 }
 
 export const api = {

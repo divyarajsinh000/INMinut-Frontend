@@ -1,4 +1,4 @@
-import { Linking, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,6 +7,10 @@ import { AppPalette } from '@/constants/theme';
 import { useAppStore } from '@/store';
 
 const CONTACT_EMAIL = 'inminut@gmail.com';
+const INSTAGRAM_URL = 'https://www.instagram.com/inminut_app/';
+const FACEBOOK_URL = 'https://www.facebook.com/INMinut/';
+const YOUTUBE_URL = 'https://www.youtube.com/@INMinut';
+const X_URL = 'https://x.com/INMinut_app';
 
 export default function NotificationsScreen() {
   const [showCityModal, setShowCityModal] = useState(false);
@@ -35,10 +39,14 @@ export default function NotificationsScreen() {
     .join(', ');
 
   const openEmail = () => Linking.openURL(`mailto:${CONTACT_EMAIL}?subject=INMinut App Support`);
+  const openInstagram = () => Linking.openURL(INSTAGRAM_URL);
+  const openFacebook = () => Linking.openURL(FACEBOOK_URL);
+  const openYoutube = () => Linking.openURL(YOUTUBE_URL);
+  const openX = () => Linking.openURL(X_URL);
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: themeStyles.bg }]}>
-      <View style={[styles.container, { backgroundColor: themeStyles.bg }]}>
+      <ScrollView contentContainerStyle={[styles.container, { backgroundColor: themeStyles.bg, paddingBottom: 120 }]} showsVerticalScrollIndicator>
         <Text style={[styles.title, { color: themeStyles.text }]}>Profile</Text>
         <Text style={[styles.subtitle, { color: themeStyles.textSecondary }]}>Manage local preferences and support details.</Text>
 
@@ -81,6 +89,50 @@ export default function NotificationsScreen() {
           <Ionicons name="chevron-forward" size={22} color={themeStyles.textSecondary} />
         </Pressable>
 
+        <Pressable style={[styles.settingCard, { backgroundColor: themeStyles.card, borderColor: themeStyles.border }]} onPress={openInstagram}>
+          <View style={[styles.settingIcon, { backgroundColor: themeStyles.iconBg }]}>
+            <Ionicons name="logo-instagram" size={22} color={AppPalette.brightOrange} />
+          </View>
+          <View style={styles.settingTextWrap}>
+            <Text style={[styles.settingTitle, { color: themeStyles.text }]}>Instagram</Text>
+            <Text style={[styles.settingSub, { color: themeStyles.textSecondary }]}>{'@inminut_app'}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={22} color={themeStyles.textSecondary} />
+        </Pressable>
+
+        <Pressable style={[styles.settingCard, { backgroundColor: themeStyles.card, borderColor: themeStyles.border }]} onPress={openFacebook}>
+          <View style={[styles.settingIcon, { backgroundColor: themeStyles.iconBg }]}>
+            <Ionicons name="logo-facebook" size={22} color={AppPalette.brightOrange} />
+          </View>
+          <View style={styles.settingTextWrap}>
+            <Text style={[styles.settingTitle, { color: themeStyles.text }]}>Facebook</Text>
+            <Text style={[styles.settingSub, { color: themeStyles.textSecondary }]}>{'INMinut'}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={22} color={themeStyles.textSecondary} />
+        </Pressable>
+
+        <Pressable style={[styles.settingCard, { backgroundColor: themeStyles.card, borderColor: themeStyles.border }]} onPress={openYoutube}>
+          <View style={[styles.settingIcon, { backgroundColor: themeStyles.iconBg }]}>
+            <Ionicons name="logo-youtube" size={22} color={AppPalette.brightOrange} />
+          </View>
+          <View style={styles.settingTextWrap}>
+            <Text style={[styles.settingTitle, { color: themeStyles.text }]}>YouTube</Text>
+            <Text style={[styles.settingSub, { color: themeStyles.textSecondary }]}>{'INMinut'}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={22} color={themeStyles.textSecondary} />
+        </Pressable>
+
+        <Pressable style={[styles.settingCard, { backgroundColor: themeStyles.card, borderColor: themeStyles.border }]} onPress={openX}>
+          <View style={[styles.settingIcon, { backgroundColor: themeStyles.iconBg }]}>
+            <Ionicons name="logo-twitter" size={22} color={AppPalette.brightOrange} />
+          </View>
+          <View style={styles.settingTextWrap}>
+            <Text style={[styles.settingTitle, { color: themeStyles.text }]}>X</Text>
+            <Text style={[styles.settingSub, { color: themeStyles.textSecondary }]}>{'@INMinut_app'}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={22} color={themeStyles.textSecondary} />
+        </Pressable>
+
         <CityPreferenceModal
           visible={showCityModal}
           cities={cities}
@@ -91,7 +143,7 @@ export default function NotificationsScreen() {
             setShowCityModal(false);
           }}
         />
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }

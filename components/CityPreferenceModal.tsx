@@ -80,8 +80,16 @@ const CityPreferenceModal = ({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
+        {!required && onClose && (
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Close city selector"
+          />
+        )}
         <View style={[styles.sheet, { backgroundColor: themeStyles.card }]}>
           <View style={styles.handle} />
           <View style={styles.headerRow}>

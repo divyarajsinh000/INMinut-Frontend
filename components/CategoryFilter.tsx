@@ -1,4 +1,5 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated } from 'react-native';
+import { useEffect, useRef } from 'react';
 import { Category } from '@/api';
 import { AppPalette, Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -7,6 +8,62 @@ interface CategoryFilterProps {
   categories: Category[];
   selectedCategoryId: string | null;
   onSelectCategory: (categoryId: string | null) => void;
+}
+
+function CategoryChip({
+  category,
+  selected,
+  themeStyles,
+  onPress,
+}: {
+  category: Category;
+  selected: boolean;
+  themeStyles: { card: string; text: string; border: string };
+  onPress: () => void;
+}) {
+  const pulse = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (!category.isHighlighted || selected) {
+      pulse.setValue(1);
+      return;
+    }
+
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 0.45, duration: 650, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 650, useNativeDriver: true }),
+      ])
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [category.isHighlighted, pulse, selected]);
+
+  return (
+    <Animated.View style={category.isHighlighted && !selected ? { opacity: pulse } : undefined}>
+      <TouchableOpacity
+        activeOpacity={0.82}
+        style={[
+          styles.categoryItem,
+          { backgroundColor: themeStyles.card, borderColor: themeStyles.border },
+          category.isHighlighted && !selected && styles.highlightedCategory,
+          selected && {
+            backgroundColor: category.backgroundColor || Colors.brightOrange,
+            borderColor: category.backgroundColor || Colors.brightOrange,
+          },
+        ]}
+        onPress={onPress}
+      >
+        <Text
+          style={[styles.categoryText, { color: selected ? category.textColor || Colors.white : themeStyles.text }]}
+          numberOfLines={1}
+          ellipsizeMode="tail"
+        >
+          {category.isHighlighted ? `★ ${category.name}` : category.name}
+        </Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
 }
 
 export default function CategoryFilter({
@@ -46,30 +103,13 @@ export default function CategoryFilter({
       {categories.map((category) => {
         const selected = selectedCategoryId === category._id;
         return (
-          <TouchableOpacity
-            activeOpacity={0.82}
+          <CategoryChip
             key={category._id}
-            style={[
-              styles.categoryItem,
-              { backgroundColor: themeStyles.card, borderColor: themeStyles.border },
-              selected && {
-                backgroundColor: category.backgroundColor || Colors.brightOrange,
-                borderColor: category.backgroundColor || Colors.brightOrange,
-              },
-            ]}
+            category={category}
+            selected={selected}
+            themeStyles={themeStyles}
             onPress={() => onSelectCategory(category._id)}
-          >
-            <Text
-              style={[
-                styles.categoryText,
-                { color: selected ? category.textColor || Colors.white : themeStyles.text },
-              ]}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              {category.name}
-            </Text>
-          </TouchableOpacity>
+          />
         );
       })}
     </ScrollView>
@@ -95,6 +135,10 @@ const styles = StyleSheet.create({
   selectedCategory: {
     backgroundColor: Colors.brightOrange,
     borderColor: Colors.brightOrange,
+  },
+  highlightedCategory: {
+    borderColor: '#F59E0B',
+    borderWidth: 2,
   },
   categoryText: {
     fontSize: 12,

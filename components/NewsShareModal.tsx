@@ -1,9 +1,10 @@
-import { Modal, View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { Modal, View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
 import { AppPalette, Colors } from '@/constants/theme';
 import { MediaItem, NewsItem } from '@/api';
-import { copyNewsText, generateAndShareNewsPdf, shareSingleMediaFile, shareTextOnly } from '@/utils/share';
+import { copyNewsText, generateAndShareNewsPdf, shareSingleMediaFile } from '@/utils/share';
+import * as Clipboard from 'expo-clipboard';
 import { getMediaName } from '@/utils/media';
 
 interface NewsShareModalProps {
@@ -48,6 +49,19 @@ export default function NewsShareModal({ visible, item, onClose, onShared }: New
     hashtags: item.hashtags || [],
     cities: item.cities || [],
     publishedDate: item.publishedDate,
+    link: (item as any).titleLink || (item as any).title_link || '',
+  };
+
+  const APP_LINK = 'https://play.google.com/store/apps/details?id=com.news.brekingapp';
+
+  const composeShareText = () => {
+    const newsLink = (item as any).titleLink || (item as any).title_link || '';
+    const deepLink = `inminut://news/${item._id}`;
+    const lines: string[] = [];
+    if (newsLink) lines.push(`view news : ${newsLink}`);
+    else lines.push(`view news : ${deepLink}`);
+    lines.push(`download app : ${APP_LINK}`);
+    return lines.join('\n');
   };
 
   const runShare = async (key: string, action: () => Promise<boolean | void>, closeAfter = true) => {
@@ -169,14 +183,20 @@ export default function NewsShareModal({ visible, item, onClose, onShared }: New
                   icon: 'text-outline',
                   title: 'Share text',
                   subtitle: 'Share title, description, content, city and hashtags',
-                  onPress: () => runShare('text', () => shareTextOnly(payload)),
+                  onPress: () => runShare('text', async () => {
+                    const message = composeShareText();
+                    await Share.share({ message });
+                  }),
                 })}
                 {renderOption({
                   key: 'copy',
                   icon: 'copy-outline',
                   title: 'Copy text',
                   subtitle: 'Copy properly aligned news text to clipboard',
-                  onPress: () => runShare('copy', () => copyNewsText(payload), false),
+                  onPress: () => runShare('copy', async () => {
+                    const message = composeShareText();
+                    await Clipboard.setStringAsync(message);
+                  }, false),
                 })}
                 {renderOption({
                   key: 'all-pdf',
