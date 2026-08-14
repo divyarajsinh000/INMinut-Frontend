@@ -43,9 +43,9 @@ const INITIAL_CARD_WIDTH = Dimensions.get("window").width - 32;
 const DEFAULT_TITLE_FONT_SIZE = 20;
 const DEFAULT_DESCRIPTION_FONT_SIZE = 14;
 
-// Replace this example URL with the real INMinut Play Store URL when available.
+const NEWS_BASE_URL = "https://inminut.com/news";
 const PLAY_STORE_LINK =
-  "https://play.google.com/store/apps/details?id=com.news.brekingapp";
+  "https://play.google.com/store/apps/details?id=com.inminut";
 
 interface NewsCardProps {
   item: NewsItem;
@@ -383,6 +383,7 @@ export default function NewsCard({
         hashtags: item.hashtags || [],
         cities: item.cities || [],
         publishedDate: item.publishedDate,
+        link: `${NEWS_BASE_URL}/${item._id}`,
       });
 
     setShareImageUri(firstImageUrl);
@@ -417,10 +418,10 @@ export default function NewsCard({
   };
 
   const buildShareMessage = () => {
-    const newsLink = titleLink || `inminut://news/${item._id}`;
+    const newsLink = `${NEWS_BASE_URL}/${item._id}`;
     const lines: string[] = [];
-    if (newsLink) lines.push(`view news : ${newsLink}`);
-    lines.push(`download app : ${PLAY_STORE_LINK}`);
+    lines.push(`View news : ${newsLink}`);
+    lines.push(`Download app : ${PLAY_STORE_LINK}`);
     return lines.join('\n');
   };
 
@@ -530,6 +531,7 @@ export default function NewsCard({
               hashtags: item.hashtags || [],
               cities: item.cities || [],
               publishedDate: item.publishedDate,
+              link: `${NEWS_BASE_URL}/${item._id}`,
             });
 
       if (shared !== false) {

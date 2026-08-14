@@ -35,8 +35,18 @@ const hasRenderableNews = (item: NewsItem) => {
 };
 
 export default function HomeScreen() {
-  const params = useLocalSearchParams<{ newsId?: string | string[] }>();
-  const notificationNewsId = Array.isArray(params.newsId) ? params.newsId[0] : params.newsId;
+  const params = useLocalSearchParams<{
+    newsId?: string | string[];
+    newsSource?: string | string[];
+  }>();
+
+  const incomingNewsId = Array.isArray(params.newsId)
+    ? params.newsId[0]
+    : params.newsId;
+
+  const incomingNewsSource = Array.isArray(params.newsSource)
+    ? params.newsSource[0]
+    : params.newsSource;
   const {
     news,
     categories,
@@ -80,13 +90,12 @@ export default function HomeScreen() {
   const [notificationNews, setNotificationNews] = useState<NewsItem | null>(null);
   const [isLoadingNotificationNews, setIsLoadingNotificationNews] = useState(false);
   const [notificationNewsError, setNotificationNewsError] = useState<string | null>(null);
-  
-  const [guideLayouts, setGuideLayouts] = useState<Record<string, any>>({});
-  const cityButtonRef = useRef<View>(null);
-  const helpButtonRef = useRef<View>(null);
-  const categoryRowRef = useRef<View>(null);
-    const newsListRef = useRef<FlatList<FeedItem>>(null);
-const refreshInProgressRef = useRef(false);
+  const [openedNewsId, setOpenedNewsId] = useState<string | null>(null);
+  const [openedNewsSource, setOpenedNewsSource] = useState<
+    'share' | 'notification' | null
+  >(null);
+  const newsListRef = useRef<FlatList<FeedItem>>(null);
+  const refreshInProgressRef = useRef(false);
 
   const viewedNewsIdsRef = useRef<Set<string>>(new Set());
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
@@ -209,11 +218,20 @@ const refreshInProgressRef = useRef(false);
 
 
   useEffect(() => {
+    if (!incomingNewsId) return;
+
+    setOpenedNewsId(incomingNewsId);
+    setOpenedNewsSource(
+      incomingNewsSource === 'notification' ? 'notification' : 'share',
+    );
+  }, [incomingNewsId, incomingNewsSource]);
+
+  useEffect(() => {
     let cancelled = false;
 
     const loadNotificationNews = async () => {
-      if (!notificationNewsId) {
-        setNotificationNews(null);
+      if (!openedNewsId) {
+        setIsLoadingNotificationNews(false);
         setNotificationNewsError(null);
         return;
       }
@@ -222,10 +240,17 @@ const refreshInProgressRef = useRef(false);
       setNotificationNewsError(null);
 
       try {
-        const selectedNews = await api.getNewsById(notificationNewsId);
+        const selectedNews = await api.getNewsById(openedNewsId);
         if (!cancelled) {
           setNotificationNews(selectedNews);
           viewedNewsIdsRef.current.delete(selectedNews._id);
+
+          // Keep Home mounted. Only clear the query params after the selected
+          // news has loaded successfully, so app restart returns to normal Home.
+          router.setParams({
+            newsId: undefined,
+            newsSource: undefined,
+          });
         }
       } catch (notificationError) {
         console.error('Fetch notification news error:', notificationError);
@@ -243,53 +268,19 @@ const refreshInProgressRef = useRef(false);
     return () => {
       cancelled = true;
     };
-  }, [notificationNewsId]);
+  }, [openedNewsId]);
 
   const closeNotificationNews = useCallback(() => {
     setNotificationNews(null);
     setNotificationNewsError(null);
-    router.replace('/(tabs)');
+    setOpenedNewsId(null);
+    setOpenedNewsSource(null);
+
+    router.setParams({
+      newsId: undefined,
+      newsSource: undefined,
+    });
   }, []);
-
-  const updateGuideLayout = useCallback(
-    (key: 'cityButton' | 'helpButton' | 'categoryRow', refOrEvent: any) => {
-      // If a ref was provided, measure in window to get absolute coordinates.
-      try {
-        if (refOrEvent?.current?.measureInWindow) {
-          refOrEvent.current.measureInWindow((x: number, y: number, width: number, height: number) => {
-            if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(width) || !Number.isFinite(height)) {
-              return;
-            }
-
-            setGuideLayouts((prev) => ({
-              ...prev,
-              [key]: { x, y, width, height },
-            }));
-          });
-          return;
-        }
-
-        // Fallback: accept an onLayout event's local layout if a ref isn't available.
-        const { x, y, width, height } = refOrEvent?.nativeEvent?.layout || {};
-        if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(width) || !Number.isFinite(height)) {
-          return;
-        }
-
-        setGuideLayouts((prev) => ({
-          ...prev,
-          [key]: { x, y, width, height },
-        }));
-      } catch (err) {
-        // noop on measurement errors
-      }
-    },
-    [],
-  );
-
-  useEffect(() => {
-    if (!showAppGuide) return;
-    setGuideLayouts({});
-  }, [showAppGuide, news.length, categories.length]);
 
   const feedItems: FeedItem[] = [];
   
@@ -380,8 +371,6 @@ const refreshInProgressRef = useRef(false);
     return (
       <NewsCard
         item={item.data}
-        onMediaLayout={index === 0 ? (layout) => setGuideLayouts(prev => ({ ...prev, newsMedia: layout })) : undefined}
-        onActionsLayout={index === 0 ? (layout) => setGuideLayouts(prev => ({ ...prev, saveShare: layout })) : undefined}
       />
     );
   };
@@ -420,20 +409,16 @@ const refreshInProgressRef = useRef(false);
 
             <View style={styles.headerActions}>
               <Pressable
-                ref={helpButtonRef}
                 style={styles.headerIconButton}
                 onPress={() => setShowAppGuide(true)}
-                onLayout={() => updateGuideLayout('helpButton', helpButtonRef)}
                 hitSlop={12}
               >
                 <Ionicons name="help-circle-outline" size={25} color={AppPalette.brightOrange} />
               </Pressable>
 
               <Pressable
-                ref={cityButtonRef}
                 style={styles.headerIconButton}
                 onPress={() => setShowCityModal(true)}
-                onLayout={() => updateGuideLayout('cityButton', cityButtonRef)}
                 hitSlop={12}
               >
                 <Ionicons name="location-outline" size={25} color={AppPalette.brightOrange} />
@@ -443,19 +428,19 @@ const refreshInProgressRef = useRef(false);
         </View>
 
         <View
-          ref={categoryRowRef}
           style={styles.filterWrapper}
-          onLayout={() => updateGuideLayout('categoryRow', categoryRowRef)}
         >
           <CategoryFilter categories={categories} selectedCategoryId={selectedCategory} onSelectCategory={setSelectedCategory} />
         </View>
 
-        {!!notificationNewsId && (
+        {!!openedNewsId && (
           <View style={[styles.notificationNewsBar, { backgroundColor: themeStyles.card, borderColor: themeStyles.border }]}>
             <View style={styles.notificationNewsBarTextWrap}>
               <Ionicons name="notifications" size={17} color={AppPalette.brightOrange} />
               <Text style={[styles.notificationNewsBarText, { color: themeStyles.text }]} numberOfLines={1}>
-                News opened from notification
+                {openedNewsSource === 'notification'
+                  ? 'News opened from notification'
+                  : 'News opened from shared link'}
               </Text>
             </View>
             <Pressable onPress={closeNotificationNews} hitSlop={8} style={styles.showAllButton}>
@@ -536,7 +521,7 @@ const refreshInProgressRef = useRef(false);
           }}
         />
 
-        <AppGuideOverlay visible={showAppGuide} onFinish={() => setShowAppGuide(false)} layouts={guideLayouts} />
+        <AppGuideOverlay visible={showAppGuide} onFinish={() => setShowAppGuide(false)} />
       </View>
     </SafeAreaView>
   );

@@ -81,7 +81,10 @@ const openNotificationNews = (
   setTimeout(() => {
     router.replace({
       pathname: '/(tabs)',
-      params: { newsId },
+      params: {
+        newsId,
+        newsSource: 'notification',
+      },
     });
   }, 100);
 };

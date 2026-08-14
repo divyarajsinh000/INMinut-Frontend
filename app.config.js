@@ -40,7 +40,7 @@ export default ({ config }) => ({
     edgeToEdgeEnabled: false,
     softwareKeyboardLayoutMode: "resize",
     predictiveBackGestureEnabled: false,
-   package: "com.inminut",
+    package: "com.inminut",
     googleServicesFile: "./google-services.json",
     permissions: ["NOTIFICATIONS", "RECEIVE_BOOT_COMPLETED", "VIBRATE"],
     blockedPermissions: [
@@ -57,6 +57,21 @@ export default ({ config }) => ({
       "android.permission.READ_MEDIA_VIDEO",
       "android.permission.READ_MEDIA_AUDIO",
       "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+    ],
+
+    intentFilters: [
+      {
+        action: "VIEW",
+        autoVerify: true,
+        data: [
+          {
+            scheme: "https",
+            host: "inminut.com",
+            pathPrefix: "/news",
+          },
+        ],
+        category: ["BROWSABLE", "DEFAULT"],
+      },
     ],
   },
 

@@ -9,86 +9,76 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ThemedText } from '@/components/themed-text';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppPalette } from '@/constants/theme';
 
 export const APP_GUIDE_DONE_KEY = 'inminut_app_guide_done_v1';
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
-type GuidePlacement =
-  | 'cityButton'
-  | 'helpButton'
-  | 'categoryRow'
-  | 'newsMedia'
-  | 'saveShare'
-  | 'bottomTabs'
-  | 'pullRefresh';
-
-interface GuideStep {
-  icon: IoniconName;
-  title: string;
-  body: string;
-  target: string;
-  placement: GuidePlacement;
-}
-
 interface AppGuideOverlayProps {
   visible: boolean;
   onFinish: () => void;
-  layouts?: Record<string, { x: number; y: number; width: number; height: number }>;
+}
+
+type StepKey =
+  | 'location'
+  | 'help'
+  | 'categories'
+  | 'media'
+  | 'actions'
+  | 'refresh'
+  | 'tabs';
+
+interface GuideStep {
+  key: StepKey;
+  icon: IoniconName;
+  title: string;
+  body: string;
 }
 
 const guideSteps: GuideStep[] = [
   {
+    key: 'location',
     icon: 'location-outline',
     title: 'Select your city',
-    body: 'Tap here to choose your preferred cities. After this, your feed will show local news from those cities.',
-    target: 'City filter',
-    placement: 'cityButton',
+    body: 'Tap the location icon to choose your preferred cities and personalize local news.',
   },
   {
+    key: 'help',
     icon: 'help-circle-outline',
     title: 'Open help anytime',
-    body: 'Tap this help button whenever you want to see this app guide again.',
-    target: 'Help button',
-    placement: 'helpButton',
+    body: 'Tap the help icon whenever you want to view this app guide again.',
   },
   {
+    key: 'categories',
     icon: 'options-outline',
     title: 'Filter by category',
-    body: 'Use these category chips to quickly see only politics, sports, business, entertainment or local updates.',
-    target: 'Category row',
-    placement: 'categoryRow',
+    body: 'Use the category chips to quickly switch between different types of news.',
   },
   {
+    key: 'media',
     icon: 'images-outline',
     title: 'Read news and media',
-    body: 'News cards show images, videos and PDFs in one place. Tap media to preview it in full screen.',
-    target: 'News card',
-    placement: 'newsMedia',
+    body: 'News cards can contain images, videos and PDFs. Tap media to preview it.',
   },
   {
+    key: 'actions',
     icon: 'bookmark-outline',
     title: 'Save and share news',
-    body: 'Use the save button to keep important news for later, and the share button to send it to others.',
-    target: 'Save / share buttons',
-    placement: 'saveShare',
+    body: 'Use bookmark to save news and the WhatsApp/share buttons to send it to others.',
   },
   {
+    key: 'refresh',
     icon: 'refresh-outline',
     title: 'Refresh latest news',
-    body: 'Pull the news list downward to refresh and load the newest stories.',
-    target: 'News list',
-    placement: 'pullRefresh',
+    body: 'Pull the feed downward to refresh and load the newest available stories.',
   },
   {
+    key: 'tabs',
     icon: 'grid-outline',
-    title: 'Use bottom tabs',
-    body: 'Use the bottom tabs to move between home, saved news, notifications and other app sections.',
-    target: 'Bottom navigation',
-    placement: 'bottomTabs',
+    title: 'Use bottom navigation',
+    body: 'Use Home, Search, Saved and Profile to move around the app.',
   },
 ];
 
@@ -97,14 +87,10 @@ export const hasCompletedAppGuide = async () => {
   return value === 'true';
 };
 
-const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
-
-const AppGuideOverlay = ({ visible, onFinish, layouts = {} }: AppGuideOverlayProps) => {
+const AppGuideOverlay = ({ visible, onFinish }: AppGuideOverlayProps) => {
   const [stepIndex, setStepIndex] = useState(0);
   const { width, height } = useWindowDimensions();
-
-  const step = guideSteps[stepIndex];
-  const isLast = stepIndex === guideSteps.length - 1;
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (visible) setStepIndex(0);
@@ -115,435 +101,952 @@ const AppGuideOverlay = ({ visible, onFinish, layouts = {} }: AppGuideOverlayPro
     onFinish();
   };
 
-  const goNext = () => {
-    if (isLast) {
-      complete();
-      return;
-    }
-    setStepIndex((prev) => prev + 1);
-  };
+  const step = guideSteps[stepIndex];
+  const isLast = stepIndex === guideSteps.length - 1;
 
-  const insets = useSafeAreaInsets();
+  const metrics = useMemo(() => {
+    const side = 16;
+    const contentWidth = width - side * 2;
+    const headerTop = insets.top + 10;
+    const headerHeight = 58;
+    const categoryTop = headerTop + headerHeight + 10;
+    const categoryHeight = 40;
+    const cardTop = categoryTop + categoryHeight + 10;
+    const cardWidth = contentWidth;
+    const cardMediaHeight = Math.min(210, Math.max(150, height * 0.24));
+    const cardBodyHeight = 170;
+    const cardHeight = cardMediaHeight + cardBodyHeight;
+    const tabHeight = Math.max(70, insets.bottom + 58);
+    const tabTop = height - tabHeight;
 
-  const layout = useMemo(() => {
-    const cardWidth = Math.min(width - 24, 340);
-    const screenPad = 12;
-    const tooltipHeight = 240;
-    const safeTop = insets.top + 12;
-    const safeBottom = height - insets.bottom - 12;
+    const locationSize = 38;
+    const helpSize = 38;
+    const locationLeft = width - side - locationSize;
+    const helpLeft = locationLeft - 10 - helpSize;
 
-    const getLeft = (targetLeft: number, targetWidth: number) => {
-      const centerLeft = targetLeft + targetWidth / 2 - cardWidth / 2;
-      return clamp(centerLeft, screenPad, width - cardWidth - screenPad);
-    };
+    const actionRowTop = cardTop + cardMediaHeight + cardBodyHeight - 58;
+    const actionWidth = 160;
+    const actionLeft = side + cardWidth - actionWidth - 12;
 
-    const tooltipForTarget = (targetTop: number, targetLeft: number, targetWidth: number, targetHeight: number) => {
-      const targetCenterY = targetTop + targetHeight / 2;
-      const spaceBelow = safeBottom - (targetTop + targetHeight + 16);
-      const spaceAbove = targetTop - 16 - safeTop;
-
-      let top = clamp(
-        targetCenterY - tooltipHeight / 2,
-        safeTop,
-        Math.max(safeTop, safeBottom - tooltipHeight),
-      );
-
-      if (spaceBelow >= tooltipHeight + 20) {
-        top = targetTop + targetHeight + 16;
-      } else if (spaceAbove >= tooltipHeight + 20) {
-        top = targetTop - tooltipHeight - 16;
-      }
-
-      return {
-        top: clamp(top, safeTop, Math.max(safeTop, safeBottom - tooltipHeight)),
-        left: getLeft(targetLeft, targetWidth),
+    const target = {
+      location: {
+        top: headerTop + 8,
+        left: locationLeft,
+        width: locationSize,
+        height: locationSize,
+        radius: 14,
+      },
+      help: {
+        top: headerTop + 8,
+        left: helpLeft,
+        width: helpSize,
+        height: helpSize,
+        radius: 14,
+      },
+      categories: {
+        top: categoryTop,
+        left: side,
+        width: contentWidth,
+        height: categoryHeight,
+        radius: 18,
+      },
+      media: {
+        top: cardTop,
+        left: side,
         width: cardWidth,
-      };
+        height: cardMediaHeight,
+        radius: 22,
+      },
+      actions: {
+        top: actionRowTop,
+        left: actionLeft,
+        width: actionWidth,
+        height: 46,
+        radius: 16,
+      },
+      refresh: {
+        top: cardTop,
+        left: side,
+        width: cardWidth,
+        height: Math.min(cardHeight, tabTop - cardTop - 8),
+        radius: 24,
+      },
+      tabs: {
+        top: tabTop,
+        left: 0,
+        width,
+        height: tabHeight,
+        radius: 0,
+      },
+    } as const;
+
+    return {
+      side,
+      contentWidth,
+      headerTop,
+      headerHeight,
+      categoryTop,
+      categoryHeight,
+      cardTop,
+      cardWidth,
+      cardMediaHeight,
+      cardBodyHeight,
+      cardHeight,
+      tabTop,
+      tabHeight,
+      helpLeft,
+      locationLeft,
+      actionRowTop,
+      actionLeft,
+      actionWidth,
+      target,
     };
+  }, [height, insets.bottom, insets.top, width]);
 
-    const measured = layouts[step.placement];
+  const target = metrics.target[step.key];
 
-    const refineWithMeasured = (baseLayout: { targetStyle: any; handStyle: any; tooltipStyle: any }) => {
-      if (!measured || !Number.isFinite(measured.x) || !Number.isFinite(measured.y) || !Number.isFinite(measured.width) || !Number.isFinite(measured.height)) {
-        return baseLayout;
-      }
+  const tooltip = useMemo(() => {
+    const tooltipWidth = Math.min(width - 24, 350);
+    const estimatedHeight = 220;
+    const gap = 14;
+    const safeTop = insets.top + 8;
+    const safeBottom = height - insets.bottom - 8;
 
-      const baseWidth = Number(baseLayout.targetStyle.width || 0);
-      const baseHeight = Number(baseLayout.targetStyle.height || 0);
-      const baseLeft = Number(baseLayout.targetStyle.left || 0);
-      const baseTop = Number(baseLayout.targetStyle.top ?? (baseLayout.targetStyle.bottom ? (height - (Number(baseLayout.targetStyle.bottom || 0) + baseHeight)) : 0));
+    let top = target.top + target.height + gap;
 
-      const widthDelta = Math.abs(measured.width - baseWidth);
-      const heightDelta = Math.abs(measured.height - baseHeight);
-      const leftDelta = Math.abs(measured.x - baseLeft);
-      const topDelta = Math.abs(measured.y - baseTop);
-
-      // Loosen thresholds so measured layouts are accepted more often across devices
-      const shouldUseMeasured = widthDelta < 140 && heightDelta < 120 && leftDelta < 140 && topDelta < 220;
-      if (!shouldUseMeasured) {
-        return baseLayout;
-      }
-
-      const refinedTargetStyle = {
-        ...baseLayout.targetStyle,
-        top: measured.y,
-        left: measured.x,
-        width: measured.width,
-        height: measured.height,
-      };
-
-      return {
-        ...baseLayout,
-        targetStyle: refinedTargetStyle,
-        handStyle: {
-          ...baseLayout.handStyle,
-          top: measured.y + measured.height - 5,
-          left: measured.x + measured.width / 2 - 20,
-        },
-        tooltipStyle: tooltipForTarget(measured.y, measured.x, measured.width, measured.height),
-      };
-    };
-
-    // Prefer the stable fallback positions used for the guide design.
-    // Only accept measured coordinates when they are close to the intended target to avoid jumpy drift.
-    let baseLayout: { targetStyle: any; handStyle: any; tooltipStyle: any };
-
-    switch (step.placement) {
-      case 'cityButton': {
-        const targetWidth = Math.min(118, width * 0.36);
-        const targetHeight = 42;
-        const targetTop = insets.top + 8;
-        const targetLeft = width - 16 - targetWidth;
-        baseLayout = {
-          targetStyle: {
-            top: targetTop,
-            left: targetLeft,
-            width: targetWidth,
-            height: targetHeight,
-            borderRadius: 22,
-          },
-          handStyle: { top: targetTop + targetHeight - 5, left: targetLeft + targetWidth - 46 },
-          tooltipStyle: tooltipForTarget(targetTop, targetLeft, targetWidth, targetHeight),
-        };
-        break;
-      }
-      case 'helpButton': {
-        const targetWidth = 42;
-        const targetHeight = 42;
-        const targetTop = insets.top + 8;
-        const targetLeft = width - 66 - Math.min(118, width * 0.36);
-        baseLayout = {
-          targetStyle: { top: targetTop, left: targetLeft, width: targetWidth, height: targetHeight, borderRadius: 21 },
-          handStyle: { top: targetTop + targetHeight - 5, left: targetLeft + 8 },
-          tooltipStyle: tooltipForTarget(targetTop, targetLeft, targetWidth, targetHeight),
-        };
-        break;
-      }
-      case 'categoryRow': {
-        const targetTop = insets.top + 54;
-        const targetLeft = 12;
-        const targetWidth = Math.max(220, width - 24);
-        const targetHeight = 40;
-        baseLayout = {
-          targetStyle: { top: targetTop, left: targetLeft, width: targetWidth, height: targetHeight, borderRadius: 18 },
-          handStyle: { top: targetTop + targetHeight - 10, left: 44 },
-          tooltipStyle: tooltipForTarget(targetTop, targetLeft, targetWidth, targetHeight),
-        };
-        break;
-      }
-      case 'newsMedia': {
-        const targetTop = insets.top + 102;
-        const targetLeft = 16;
-        const targetWidth = width - 32;
-        const targetHeight = Math.min(215, height * 0.29);
-        baseLayout = {
-          targetStyle: { top: targetTop, left: targetLeft, width: targetWidth, height: targetHeight, borderRadius: 24 },
-          handStyle: { top: targetTop + targetHeight - 48, left: 52 },
-          tooltipStyle: tooltipForTarget(targetTop, targetLeft, targetWidth, targetHeight),
-        };
-        break;
-      }
-      case 'saveShare': {
-        const targetWidth = 90;
-        const targetHeight = 46;
-        const targetTop = insets.top + 340;
-        const targetLeft = width - 32 - targetWidth;
-        baseLayout = {
-          targetStyle: { top: targetTop, left: targetLeft, width: targetWidth, height: targetHeight, borderRadius: 14 },
-          handStyle: { top: targetTop + targetHeight - 8, left: targetLeft + targetWidth - 48 },
-          tooltipStyle: tooltipForTarget(targetTop, targetLeft, targetWidth, targetHeight),
-        };
-        break;
-      }
-      case 'pullRefresh': {
-        const targetTop = insets.top + 102;
-        const targetLeft = 16;
-        const targetWidth = width - 32;
-        const targetHeight = Math.min(315, height * 0.42);
-        baseLayout = {
-          targetStyle: { top: targetTop, left: targetLeft, width: targetWidth, height: targetHeight, borderRadius: 26 },
-          handStyle: { top: targetTop + 24, left: width / 2 - 25 },
-          tooltipStyle: tooltipForTarget(targetTop, targetLeft, targetWidth, targetHeight),
-        };
-        break;
-      }
-      case 'bottomTabs':
-      default: {
-        const targetHeight = 74;
-        const targetLeft = 10;
-        const targetWidth = width - 20;
-        const targetBottom = insets.bottom + 8;
-        const targetTop = height - targetBottom - targetHeight;
-        baseLayout = {
-          // Use `top` so measured window coordinates compare correctly in refineWithMeasured
-          targetStyle: { top: targetTop, left: targetLeft, width: targetWidth, height: targetHeight, borderRadius: 28 },
-          handStyle: { top: targetTop - 8, left: width / 2 - 27 },
-          tooltipStyle: tooltipForTarget(targetTop, targetLeft, targetWidth, targetHeight),
-        };
-        break;
-      }
+    if (top + estimatedHeight > safeBottom) {
+      top = target.top - estimatedHeight - gap;
     }
 
-    return refineWithMeasured(baseLayout);
-  }, [height, step.placement, width, insets, layouts]);
+    if (top < safeTop) {
+      top = Math.max(
+        safeTop,
+        Math.min(
+          safeBottom - estimatedHeight,
+          target.top + target.height / 2 - estimatedHeight / 2,
+        ),
+      );
+    }
 
-  const progressText = `${stepIndex + 1} / ${guideSteps.length}`;
+    const left = Math.max(
+      12,
+      Math.min(
+        width - tooltipWidth - 12,
+        target.left + target.width / 2 - tooltipWidth / 2,
+      ),
+    );
+
+    return {
+      top,
+      left,
+      width: tooltipWidth,
+    };
+  }, [height, insets.bottom, insets.top, target, width]);
 
   if (!visible) return null;
 
   return (
-    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
-      <View style={styles.overlay}>
-        <View pointerEvents="none" style={[styles.targetHighlight, layout.targetStyle]}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      navigationBarTranslucent
+      onRequestClose={complete}
+    >
+      <SafeAreaView style={styles.root} edges={['left', 'right']}>
+        {/* Demo Home screen */}
+        <View style={styles.demoScreen}>
+          <View
+            style={[
+              styles.demoHeader,
+              {
+                top: metrics.headerTop,
+                left: metrics.side,
+                right: metrics.side,
+                height: metrics.headerHeight,
+              },
+            ]}
+          >
+            <View style={styles.demoLogoWrap}>
+              <View style={styles.demoLogoMark}>
+                <Ionicons
+                  name="newspaper"
+                  size={20}
+                  color="#FFFFFF"
+                />
+              </View>
+              <View>
+                <Text style={styles.demoLogoTitle}>INMinut</Text>
+                <Text style={styles.demoLogoSub}>News in a minute</Text>
+              </View>
+            </View>
+
+            <View style={styles.demoHeaderActions}>
+              <View style={styles.demoIconButton}>
+                <Ionicons
+                  name="help-circle-outline"
+                  size={24}
+                  color={AppPalette.brightOrange}
+                />
+              </View>
+
+              <View style={styles.demoIconButton}>
+                <Ionicons
+                  name="location-outline"
+                  size={24}
+                  color={AppPalette.brightOrange}
+                />
+              </View>
+            </View>
+          </View>
+
+          <View
+            style={[
+              styles.demoCategories,
+              {
+                top: metrics.categoryTop,
+                left: metrics.side,
+                width: metrics.contentWidth,
+                height: metrics.categoryHeight,
+              },
+            ]}
+          >
+            {['All', 'Local', 'Sports', 'Business'].map((item, index) => (
+              <View
+                key={item}
+                style={[
+                  styles.demoCategoryChip,
+                  index === 0 && styles.demoCategoryChipActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.demoCategoryText,
+                    index === 0 && styles.demoCategoryTextActive,
+                  ]}
+                >
+                  {item}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          <View
+            style={[
+              styles.demoCard,
+              {
+                top: metrics.cardTop,
+                left: metrics.side,
+                width: metrics.cardWidth,
+                height: metrics.cardHeight,
+              },
+            ]}
+          >
+            <View
+              style={[
+                styles.demoMedia,
+                { height: metrics.cardMediaHeight },
+              ]}
+            >
+              <View style={styles.demoMediaBadge}>
+                <Ionicons name="flash" size={12} color="#FFFFFF" />
+                <Text style={styles.demoMediaBadgeText}>Breaking</Text>
+              </View>
+
+              <View style={styles.demoMediaContent}>
+                <Ionicons
+                  name="images-outline"
+                  size={46}
+                  color="#CBD5E1"
+                />
+                <Text style={styles.demoMediaText}>Demo news image</Text>
+              </View>
+            </View>
+
+            <View style={styles.demoCardBody}>
+              <View style={styles.demoMetaRow}>
+                <View style={styles.demoNewsBadge}>
+                  <Text style={styles.demoNewsBadgeText}>NEWS</Text>
+                </View>
+                <Text style={styles.demoDate}>Today</Text>
+              </View>
+
+              <Text style={styles.demoTitle} numberOfLines={2}>
+                This is a demo news story used for the INMinut app guide
+              </Text>
+
+              <Text style={styles.demoDescription} numberOfLines={2}>
+                Learn how to read, save, share and refresh news using the main
+                controls in the app.
+              </Text>
+
+              <View style={styles.demoFooter}>
+                <Text style={styles.demoReporter}>INMinut</Text>
+
+                <View style={styles.demoActions}>
+                  <View style={styles.demoActionButton}>
+                    <Ionicons
+                      name="heart-outline"
+                      size={18}
+                      color={AppPalette.ink}
+                    />
+                  </View>
+                  <View style={styles.demoActionButton}>
+                    <Ionicons
+                      name="bookmark-outline"
+                      size={18}
+                      color={AppPalette.ink}
+                    />
+                  </View>
+                  <View
+                    style={[
+                      styles.demoActionButton,
+                      styles.demoWhatsappButton,
+                    ]}
+                  >
+                    <Ionicons
+                      name="logo-whatsapp"
+                      size={19}
+                      color="#FFFFFF"
+                    />
+                  </View>
+                  <View style={styles.demoActionButton}>
+                    <Ionicons
+                      name="share-social-outline"
+                      size={18}
+                      color={AppPalette.ink}
+                    />
+                  </View>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          <View
+            style={[
+              styles.demoTabs,
+              {
+                top: metrics.tabTop,
+                height: metrics.tabHeight,
+              },
+            ]}
+          >
+            {[
+              ['home', 'Home'],
+              ['search-outline', 'Search'],
+              ['bookmark-outline', 'Saved'],
+              ['person-outline', 'Profile'],
+            ].map(([icon, label], index) => (
+              <View key={label} style={styles.demoTabItem}>
+                <Ionicons
+                  name={icon as IoniconName}
+                  size={22}
+                  color={index === 0 ? AppPalette.brightOrange : '#94A3B8'}
+                />
+                <Text
+                  style={[
+                    styles.demoTabText,
+                    index === 0 && styles.demoTabTextActive,
+                  ]}
+                >
+                  {label}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* Spotlight dim layer */}
+        <View pointerEvents="none" style={styles.dimLayer} />
+
+        <View
+          pointerEvents="none"
+          style={[
+            styles.targetHighlight,
+            {
+              top: target.top - 5,
+              left: target.left - 5,
+              width: target.width + 10,
+              height: target.height + 10,
+              borderRadius: target.radius + 5,
+            },
+          ]}
+        >
           <View style={styles.pulseOuter}>
             <View style={styles.pulseInner} />
           </View>
         </View>
 
-        <View pointerEvents="none" style={[styles.handWrap, layout.handStyle]}>
+        <View
+          pointerEvents="none"
+          style={[
+            styles.handWrap,
+            {
+              top: Math.min(
+                height - 64,
+                target.top + target.height - 3,
+              ),
+              left: Math.max(
+                4,
+                Math.min(
+                  width - 60,
+                  target.left + target.width / 2 - 28,
+                ),
+              ),
+            },
+          ]}
+        >
           <Text style={styles.hand}>☝️</Text>
         </View>
 
-        <View style={[styles.tooltipCard, layout.tooltipStyle]}>
+        <View style={[styles.tooltipCard, tooltip]}>
           <View style={styles.tooltipHeader}>
             <View style={styles.iconWrap}>
-              <Ionicons name={step.icon} size={23} color={AppPalette.brightOrange} />
+              <Ionicons
+                name={step.icon}
+                size={22}
+                color={AppPalette.brightOrange}
+              />
             </View>
+
             <View style={styles.tooltipTitleWrap}>
-              <ThemedText style={styles.counter}>Step {progressText}</ThemedText>
-              <ThemedText style={styles.title}>{step.title}</ThemedText>
-              <ThemedText style={styles.targetText}>{step.target}</ThemedText>
+              <Text style={styles.counter}>
+                Step {stepIndex + 1} / {guideSteps.length}
+              </Text>
+              <Text style={styles.tooltipTitle}>{step.title}</Text>
             </View>
-            <Pressable onPress={complete} hitSlop={12} style={styles.closeButton}>
+
+            <Pressable
+              onPress={complete}
+              hitSlop={10}
+              style={styles.closeButton}
+            >
               <Ionicons name="close" size={20} color={AppPalette.muted} />
             </Pressable>
           </View>
 
-          <ThemedText style={styles.body}>{step.body}</ThemedText>
+          <Text style={styles.tooltipBody}>{step.body}</Text>
 
           <View style={styles.dots}>
             {guideSteps.map((item, index) => (
-              <View key={item.title} style={[styles.dot, index === stepIndex && styles.activeDot]} />
+              <View
+                key={item.key}
+                style={[
+                  styles.dot,
+                  index === stepIndex && styles.activeDot,
+                ]}
+              />
             ))}
           </View>
 
           <View style={styles.footerRow}>
             <Pressable
-              onPress={() => setStepIndex((prev) => Math.max(prev - 1, 0))}
+              onPress={() =>
+                setStepIndex((prev) => Math.max(0, prev - 1))
+              }
               disabled={stepIndex === 0}
-              style={[styles.secondaryButton, stepIndex === 0 && styles.disabledButton]}
+              style={[
+                styles.backButton,
+                stepIndex === 0 && styles.disabledButton,
+              ]}
             >
-              <ThemedText style={[styles.secondaryText, stepIndex === 0 && styles.disabledText]}>Back</ThemedText>
+              <Text
+                style={[
+                  styles.backButtonText,
+                  stepIndex === 0 && styles.disabledText,
+                ]}
+              >
+                Back
+              </Text>
             </Pressable>
 
-            <Pressable onPress={goNext} style={styles.nextButton}>
-              <ThemedText style={styles.nextText}>{isLast ? 'Start using app' : 'Next'}</ThemedText>
-              <Ionicons name={isLast ? 'checkmark' : 'arrow-forward'} size={19} color="#fff" />
+            <Pressable
+              onPress={() => {
+                if (isLast) {
+                  complete();
+                } else {
+                  setStepIndex((prev) => prev + 1);
+                }
+              }}
+              style={styles.nextButton}
+            >
+              <Text style={styles.nextButtonText}>
+                {isLast ? 'Start using app' : 'Next'}
+              </Text>
+              <Ionicons
+                name={isLast ? 'checkmark' : 'arrow-forward'}
+                size={18}
+                color="#FFFFFF"
+              />
             </Pressable>
           </View>
         </View>
 
         <Pressable onPress={complete} style={styles.skipButton}>
-          <ThemedText style={styles.skipText}>Skip guide</ThemedText>
+          <Text style={styles.skipText}>Skip guide</Text>
         </Pressable>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  overlay: {
+  root: {
     flex: 1,
-    backgroundColor: 'rgba(2, 6, 23, 0.72)',
+    backgroundColor: '#FFF5F5',
   },
-  targetHighlight: {
+
+  demoScreen: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#FFF5F5',
+  },
+
+  demoHeader: {
     position: 'absolute',
-    borderWidth: 3,
-    borderColor: AppPalette.brightOrange,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    shadowColor: '#fff',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.95,
-    shadowRadius: 12,
-    elevation: 12,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
   },
-  pulseOuter: {
-    width: 24,
-    height: 24,
+
+  demoLogoWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+  },
+
+  demoLogoMark: {
+    width: 38,
+    height: 38,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 49, 49, 0.24)',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  pulseInner: {
-    width: 11,
-    height: 11,
-    borderRadius: 6,
     backgroundColor: AppPalette.brightOrange,
   },
-  handWrap: {
-    position: 'absolute',
-    width: 62,
-    height: 62,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  hand: {
-    fontSize: 48,
-  },
-  tooltipCard: {
-    position: 'absolute',
-    backgroundColor: '#fff',
-    borderRadius: 26,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    shadowColor: '#020617',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.22,
-    shadowRadius: 22,
-    elevation: 16,
-  },
-  tooltipHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 11,
-  },
-  iconWrap: {
-    height: 50,
-    width: 50,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFF5F5',
-    borderWidth: 1,
-    borderColor: '#FECACA',
-  },
-  tooltipTitleWrap: { flex: 1 },
-  counter: {
-    fontSize: 10.5,
-    color: AppPalette.brightOrange,
-    fontWeight: '900',
-    textTransform: 'uppercase',
-    letterSpacing: 0.9,
-  },
-  title: {
-    marginTop: 2,
+
+  demoLogoTitle: {
     fontSize: 19,
-    lineHeight: 24,
-    color: AppPalette.ink,
+    lineHeight: 22,
     fontWeight: '900',
+    color: AppPalette.ink,
   },
-  targetText: {
-    marginTop: 3,
-    fontSize: 12,
-    lineHeight: 16,
-    color: AppPalette.slate,
-    fontWeight: '800',
+
+  demoLogoSub: {
+    marginTop: 1,
+    fontSize: 10.5,
+    lineHeight: 13,
+    fontWeight: '700',
+    color: AppPalette.muted,
   },
-  closeButton: {
-    height: 34,
-    width: 34,
-    borderRadius: 17,
+
+  demoHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+
+  demoIconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#FECACA',
   },
-  body: {
-    marginTop: 13,
-    fontSize: 14.5,
-    lineHeight: 22,
-    color: AppPalette.slate,
-    fontWeight: '700',
-  },
-  dots: {
-    marginTop: 15,
+
+  demoCategories: {
+    position: 'absolute',
     flexDirection: 'row',
-    justifyContent: 'center',
+    alignItems: 'center',
     gap: 7,
   },
-  dot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: '#FECACA',
+
+  demoCategoryChip: {
+    height: 34,
+    paddingHorizontal: 13,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#FECACA',
   },
-  activeDot: {
-    width: 26,
+
+  demoCategoryChipActive: {
+    backgroundColor: AppPalette.brightOrange,
+    borderColor: AppPalette.brightOrange,
+  },
+
+  demoCategoryText: {
+    fontSize: 11.5,
+    fontWeight: '900',
+    color: AppPalette.ink,
+  },
+
+  demoCategoryTextActive: {
+    color: '#FFFFFF',
+  },
+
+  demoCard: {
+    position: 'absolute',
+    borderRadius: 24,
+    overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+
+  demoMedia: {
+    width: '100%',
+    backgroundColor: '#E2E8F0',
+    position: 'relative',
+  },
+
+  demoMediaContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  demoMediaText: {
+    marginTop: 7,
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#64748B',
+  },
+
+  demoMediaBadge: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    zIndex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderTopLeftRadius: 23,
+    borderBottomRightRadius: 16,
+    backgroundColor: '#EF4444',
+  },
+
+  demoMediaBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+
+  demoCardBody: {
+    flex: 1,
+    padding: 13,
+  },
+
+  demoMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+
+  demoNewsBadge: {
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 999,
     backgroundColor: AppPalette.brightOrange,
   },
-  footerRow: {
-    marginTop: 16,
-    flexDirection: 'row',
-    gap: 11,
+
+  demoNewsBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '900',
+    color: '#FFFFFF',
   },
-  secondaryButton: {
-    flex: 0.9,
-    height: 49,
-    borderRadius: 17,
+
+  demoDate: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: AppPalette.muted,
+  },
+
+  demoTitle: {
+    marginTop: 8,
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: '900',
+    color: AppPalette.ink,
+  },
+
+  demoDescription: {
+    marginTop: 5,
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: '700',
+    color: AppPalette.slate,
+  },
+
+  demoFooter: {
+    marginTop: 'auto',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+
+  demoReporter: {
+    flex: 1,
+    fontSize: 11.5,
+    fontWeight: '900',
+    color: AppPalette.ink,
+  },
+
+  demoActions: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+
+  demoActionButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
-  secondaryText: {
-    fontSize: 14.5,
+
+  demoWhatsappButton: {
+    backgroundColor: '#25D366',
+    borderColor: '#25D366',
+  },
+
+  demoTabs: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-around',
+    paddingTop: 9,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+
+  demoTabItem: {
+    minWidth: 62,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+  },
+
+  demoTabText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#94A3B8',
+  },
+
+  demoTabTextActive: {
+    color: AppPalette.brightOrange,
+  },
+
+  dimLayer: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(2, 6, 23, 0.70)',
+  },
+
+  targetHighlight: {
+    position: 'absolute',
+    borderWidth: 3,
+    borderColor: AppPalette.brightOrange,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    shadowColor: '#FFFFFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 12,
+    elevation: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  pulseOuter: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,49,49,0.24)',
+  },
+
+  pulseInner: {
+    width: 11,
+    height: 11,
+    borderRadius: 6,
+    backgroundColor: AppPalette.brightOrange,
+  },
+
+  handWrap: {
+    position: 'absolute',
+    width: 56,
+    height: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  hand: {
+    fontSize: 43,
+  },
+
+  tooltipCard: {
+    position: 'absolute',
+    borderRadius: 24,
+    padding: 15,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    shadowColor: '#020617',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.23,
+    shadowRadius: 20,
+    elevation: 18,
+  },
+
+  tooltipHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+
+  iconWrap: {
+    width: 46,
+    height: 46,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF5F5',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+
+  tooltipTitleWrap: {
+    flex: 1,
+  },
+
+  counter: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    color: AppPalette.brightOrange,
+  },
+
+  tooltipTitle: {
+    marginTop: 2,
+    fontSize: 18,
+    lineHeight: 23,
     fontWeight: '900',
     color: AppPalette.ink,
   },
-  disabledButton: { opacity: 0.45 },
-  disabledText: { color: AppPalette.muted },
-  nextButton: {
-    flex: 1.35,
-    height: 49,
+
+  closeButton: {
+    width: 34,
+    height: 34,
     borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#F8FAFC',
+  },
+
+  tooltipBody: {
+    marginTop: 11,
+    fontSize: 13.5,
+    lineHeight: 20,
+    fontWeight: '700',
+    color: AppPalette.slate,
+  },
+
+  dots: {
+    marginTop: 13,
     flexDirection: 'row',
-    gap: 8,
+    justifyContent: 'center',
+    gap: 6,
+  },
+
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#FECACA',
+  },
+
+  activeDot: {
+    width: 24,
     backgroundColor: AppPalette.brightOrange,
   },
-  nextText: {
-    color: '#fff',
-    fontSize: 14.5,
-    fontWeight: '900',
+
+  footerRow: {
+    marginTop: 14,
+    flexDirection: 'row',
+    gap: 9,
   },
+
+  backButton: {
+    flex: 0.9,
+    height: 46,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+
+  backButtonText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: AppPalette.ink,
+  },
+
+  disabledButton: {
+    opacity: 0.45,
+  },
+
+  disabledText: {
+    color: AppPalette.muted,
+  },
+
+  nextButton: {
+    flex: 1.35,
+    height: 46,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    backgroundColor: AppPalette.brightOrange,
+  },
+
+  nextButtonText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#FFFFFF',
+  },
+
   skipButton: {
     position: 'absolute',
     top: 46,
     right: 16,
-    paddingHorizontal: 13,
+    paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.14)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.24)',
+    borderColor: 'rgba(255,255,255,0.22)',
   },
+
   skipText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '900',
   },

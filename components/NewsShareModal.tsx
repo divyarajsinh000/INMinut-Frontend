@@ -41,6 +41,9 @@ export default function NewsShareModal({ visible, item, onClose, onShared }: New
     };
   }, [item.media]);
 
+  const NEWS_BASE_URL = 'https://inminut.com/news';
+  const APP_LINK = 'https://play.google.com/store/apps/details?id=com.inminut';
+
   const payload = {
     title: item.title,
     description: item.description,
@@ -49,18 +52,14 @@ export default function NewsShareModal({ visible, item, onClose, onShared }: New
     hashtags: item.hashtags || [],
     cities: item.cities || [],
     publishedDate: item.publishedDate,
-    link: (item as any).titleLink || (item as any).title_link || '',
+    link: `${NEWS_BASE_URL}/${item._id}`,
   };
 
-  const APP_LINK = 'https://play.google.com/store/apps/details?id=com.news.brekingapp';
-
   const composeShareText = () => {
-    const newsLink = (item as any).titleLink || (item as any).title_link || '';
-    const deepLink = `inminut://news/${item._id}`;
+    const newsLink = `${NEWS_BASE_URL}/${item._id}`;
     const lines: string[] = [];
-    if (newsLink) lines.push(`view news : ${newsLink}`);
-    else lines.push(`view news : ${deepLink}`);
-    lines.push(`download app : ${APP_LINK}`);
+    lines.push(`View news : ${newsLink}`);
+    lines.push(`Download app : ${APP_LINK}`);
     return lines.join('\n');
   };
 
