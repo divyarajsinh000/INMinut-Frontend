@@ -176,6 +176,18 @@ export default function HomeScreen() {
     loadData();
   }, [loadData]);
 
+  const closeNotificationNews = useCallback(() => {
+    setNotificationNews(null);
+    setNotificationNewsError(null);
+    setOpenedNewsId(null);
+    setOpenedNewsSource(null);
+
+    router.setParams({
+      newsId: undefined,
+      newsSource: undefined,
+    });
+  }, []);
+
   const changeCategoryBySwipe = useCallback((direction: 'next' | 'previous') => {
     // Include the unfiltered feed so users can swipe back to it from the first category.
     const categoryIds = [null, ...categories.map((category) => category._id)];
@@ -185,8 +197,19 @@ export default function HomeScreen() {
     if (nextIndex < 0 || nextIndex >= categoryIds.length) return;
 
     setSelectedCategory(categoryIds[nextIndex]);
+    if (openedNewsId) {
+      closeNotificationNews();
+    }
     newsListRef.current?.scrollToOffset({ offset: 0, animated: true });
-  }, [categories, selectedCategory, setSelectedCategory]);
+  }, [categories, selectedCategory, setSelectedCategory, openedNewsId, closeNotificationNews]);
+
+  const handleCategorySelect = useCallback((categoryId: string | null) => {
+    setSelectedCategory(categoryId);
+    if (openedNewsId) {
+      closeNotificationNews();
+    }
+    newsListRef.current?.scrollToOffset({ offset: 0, animated: true });
+  }, [setSelectedCategory, openedNewsId, closeNotificationNews]);
 
   const categorySwipeGesture = Gesture.Pan()
     // Let the news feed keep handling normal vertical scrolling.
@@ -269,19 +292,6 @@ export default function HomeScreen() {
       cancelled = true;
     };
   }, [openedNewsId]);
-
-  const closeNotificationNews = useCallback(() => {
-    setNotificationNews(null);
-    setNotificationNewsError(null);
-    setOpenedNewsId(null);
-    setOpenedNewsSource(null);
-
-    router.setParams({
-      newsId: undefined,
-      newsSource: undefined,
-    });
-  }, []);
-
   const feedItems: FeedItem[] = [];
   
   // 1. Inject ads/embeds that should appear before any news items (position === 0)
@@ -430,7 +440,7 @@ export default function HomeScreen() {
         <View
           style={styles.filterWrapper}
         >
-          <CategoryFilter categories={categories} selectedCategoryId={selectedCategory} onSelectCategory={setSelectedCategory} />
+          <CategoryFilter categories={categories} selectedCategoryId={selectedCategory} onSelectCategory={handleCategorySelect} />
         </View>
 
         {!!openedNewsId && (

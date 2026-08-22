@@ -10,11 +10,13 @@ const INSTAGRAM_URL = 'https://www.instagram.com/inminut_app/';
 const FACEBOOK_URL = 'https://www.facebook.com/INMinut/';
 const YOUTUBE_URL = 'https://www.youtube.com/@INMinut';
 const X_URL = 'https://x.com/INMinut_app';
+const WHATSAPP_CHANNEL_URL = 'https://whatsapp.com/channel/0029Vb8Q0nQDeON0DT3jPx3i';
 
 export default function ContactScreen() {
   const openEmail = () => Linking.openURL(`mailto:${CONTACT_EMAIL}?subject=INMinut App Support`);
   const callPhone = () => Linking.openURL(`tel:${CONTACT_PHONE_DIAL}`);
   const openWhatsApp = () => Linking.openURL(`https://wa.me/${CONTACT_PHONE_DIAL.replace('+', '')}`);
+  const openWhatsAppChannel = () => Linking.openURL(WHATSAPP_CHANNEL_URL);
   const openInstagram = () => Linking.openURL(INSTAGRAM_URL);
   const openFacebook = () => Linking.openURL(FACEBOOK_URL);
   const openYoutube = () => Linking.openURL(YOUTUBE_URL);
@@ -22,7 +24,7 @@ export default function ContactScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={[styles.container, { paddingBottom: 120 }]} showsVerticalScrollIndicator>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.container, { paddingBottom: 120 }]} showsVerticalScrollIndicator>
         <View style={styles.headerCard}>
           <View style={styles.headerIcon}>
             <Ionicons name="headset-outline" size={34} color="#fff" />
@@ -60,6 +62,17 @@ export default function ContactScreen() {
           <View style={styles.textWrap}>
             <Text style={styles.label}>WhatsApp</Text>
             <Text style={styles.value}>Message us directly</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={22} color={AppPalette.muted} />
+        </Pressable>
+
+        <Pressable style={styles.contactCard} onPress={openWhatsAppChannel}>
+          <View style={styles.iconBox}>
+            <Ionicons name="logo-whatsapp" size={24} color={AppPalette.brightOrange} />
+          </View>
+          <View style={styles.textWrap}>
+            <Text style={styles.label}>WhatsApp Channel</Text>
+            <Text style={styles.value}>Follow for updates</Text>
           </View>
           <Ionicons name="chevron-forward" size={22} color={AppPalette.muted} />
         </Pressable>
@@ -115,7 +128,7 @@ export default function ContactScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#FFF5F5' },
-  container: { flex: 1, padding: 18, backgroundColor: '#FFF5F5' },
+  container: { flexGrow: 1, padding: 18, backgroundColor: '#FFF5F5' },
   headerCard: {
     backgroundColor: AppPalette.deepBlue,
     borderRadius: 30,

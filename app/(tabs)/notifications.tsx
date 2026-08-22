@@ -2,6 +2,7 @@ import { Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from '
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
+import * as WebBrowser from 'expo-web-browser';
 import CityPreferenceModal from '@/components/CityPreferenceModal';
 import { AppPalette } from '@/constants/theme';
 import { useAppStore } from '@/store';
@@ -11,6 +12,7 @@ const INSTAGRAM_URL = 'https://www.instagram.com/inminut_app/';
 const FACEBOOK_URL = 'https://www.facebook.com/INMinut/';
 const YOUTUBE_URL = 'https://www.youtube.com/@INMinut';
 const X_URL = 'https://x.com/INMinut_app';
+const WHATSAPP_CHANNEL_URL = 'https://whatsapp.com/channel/0029Vb8Q0nQDeON0DT3jPx3i';
 
 export default function NotificationsScreen() {
   const [showCityModal, setShowCityModal] = useState(false);
@@ -39,6 +41,7 @@ export default function NotificationsScreen() {
     .join(', ');
 
   const openEmail = () => Linking.openURL(`mailto:${CONTACT_EMAIL}?subject=INMinut App Support`);
+  const openWhatsAppChannel = () => WebBrowser.openBrowserAsync(WHATSAPP_CHANNEL_URL);
   const openInstagram = () => Linking.openURL(INSTAGRAM_URL);
   const openFacebook = () => Linking.openURL(FACEBOOK_URL);
   const openYoutube = () => Linking.openURL(YOUTUBE_URL);
@@ -46,7 +49,7 @@ export default function NotificationsScreen() {
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: themeStyles.bg }]}>
-      <ScrollView contentContainerStyle={[styles.container, { backgroundColor: themeStyles.bg, paddingBottom: 120 }]} showsVerticalScrollIndicator>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.container, { backgroundColor: themeStyles.bg, paddingBottom: 24 }]} showsVerticalScrollIndicator>
         <Text style={[styles.title, { color: themeStyles.text }]}>Profile</Text>
         <Text style={[styles.subtitle, { color: themeStyles.textSecondary }]}>Manage local preferences and support details.</Text>
 
@@ -85,6 +88,17 @@ export default function NotificationsScreen() {
           <View style={styles.settingTextWrap}>
             <Text style={[styles.settingTitle, { color: themeStyles.text }]}>Email</Text>
             <Text style={[styles.settingSub, { color: themeStyles.textSecondary }]}>{CONTACT_EMAIL}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={22} color={themeStyles.textSecondary} />
+        </Pressable>
+
+        <Pressable style={[styles.settingCard, { backgroundColor: themeStyles.card, borderColor: themeStyles.border }]} onPress={openWhatsAppChannel}>
+          <View style={[styles.settingIcon, { backgroundColor: themeStyles.iconBg }]}>
+            <Ionicons name="logo-whatsapp" size={22} color={AppPalette.brightOrange} />
+          </View>
+          <View style={styles.settingTextWrap}>
+            <Text style={[styles.settingTitle, { color: themeStyles.text }]}>WhatsApp Channel</Text>
+            <Text style={[styles.settingSub, { color: themeStyles.textSecondary }]}>Follow for updates</Text>
           </View>
           <Ionicons name="chevron-forward" size={22} color={themeStyles.textSecondary} />
         </Pressable>
@@ -150,7 +164,7 @@ export default function NotificationsScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#FFF5F5' },
-  container: { flex: 1, backgroundColor: '#FFF5F5', padding: 18, paddingTop: 12 },
+  container: { flexGrow: 1, backgroundColor: '#FFF5F5', padding: 18, paddingTop: 12 },
   title: { fontSize: 28, fontWeight: '900', color: AppPalette.ink },
   subtitle: { fontSize: 14, color: AppPalette.slate, fontWeight: '600', marginTop: 5, marginBottom: 18 },
   sectionTitle: { color: AppPalette.ink, fontSize: 16, fontWeight: '900', marginTop: 6, marginBottom: 10 },

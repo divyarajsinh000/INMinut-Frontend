@@ -85,8 +85,8 @@ export const buildNewsPlainText = (payload: Partial<ShareNewsPayload>) => {
     payload.content?.trim(),
     cityLine,
     hashtagLine,
-    payload.link ? `View news: ${payload.link}` : undefined,
-    `Download app: ${APP_LINK}`,
+    payload.link ? `View Post : ${payload.link}` : undefined,
+    `Download App : ${APP_LINK}`,
   ]
     .filter(Boolean)
     .join('\n\n');
@@ -230,7 +230,7 @@ const buildNewsPdfHtml = (payload: ShareNewsPayload) => {
         ${mediaLinkListHtml(pdfs, 'Attached PDFs')}
         ${mediaLinkListHtml(videos, 'Attached Videos')}
 
-        <div class="footer">Shared from INMinut${payload.link ? `<br/>View news: ${escapeHtml(payload.link)}` : ''}<br/>Download app: ${escapeHtml(APP_LINK)}</div>
+        <div class="footer">Shared from INMinut${payload.link ? `<br/><br/>View Post : ${escapeHtml(payload.link)}` : ''}<br/><br/>Download App : ${escapeHtml(APP_LINK)}</div>
       </body>
     </html>
   `;

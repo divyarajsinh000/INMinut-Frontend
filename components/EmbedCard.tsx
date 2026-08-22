@@ -148,7 +148,7 @@ const getProcessedEmbedUrl = (value: string) => {
   }
 
   const youtubeMatch = trimmed.match(
-    /(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?/\s]{11})/i,
+    /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/|live\/))([^"&?/\s]{11})/i,
   );
 
   if (youtubeMatch?.[1]) {

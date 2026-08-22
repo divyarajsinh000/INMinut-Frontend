@@ -70,7 +70,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ news, isLoading: false });
     } catch (err) {
       console.error('Fetch news error:', err);
-      set({ error: 'Failed to load news', isLoading: false });
+      const msg = (err as any)?.response?.data?.message || 'Failed to load news';
+      set({ error: msg, isLoading: false });
     }
   },
 
@@ -101,7 +102,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ categories, isLoading: false });
     } catch (err) {
       console.error('Fetch categories error:', err);
-      set({ error: 'Failed to load categories', isLoading: false });
+      const msg = (err as any)?.response?.data?.message || 'Failed to load categories';
+      set({ error: msg, isLoading: false });
     }
   },
 
@@ -111,7 +113,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ cities });
     } catch (err) {
       console.error('Fetch cities error:', err);
-      set({ error: 'Failed to load cities' });
+      const msg = (err as any)?.response?.data?.message || 'Failed to load cities';
+      set({ error: msg });
     }
   },
 

@@ -22,6 +22,7 @@ import { MediaItem, NewsItem } from "@/api";
 import { formatDate } from "@/utils";
 import { useAppStore } from "@/store";
 import RenderHTML from "react-native-render-html";
+import { router } from "expo-router";
 import FullScreenImageViewer from "@/components/FullScreenImageViewer";
 import MediaDisplay from "@/components/MediaDisplay";
 import { shareNewsDirect, shareSingleMediaFile } from "@/utils/share";
@@ -95,7 +96,7 @@ export default function NewsCard({
   onMediaLayout,
   onActionsLayout,
 }: NewsCardProps) {
-  const { savedNews, toggleSavedNews, likedNews, toggleLikedNews, trackNewsShare, settings } = useAppStore();
+  const { savedNews, toggleSavedNews, likedNews, toggleLikedNews, trackNewsShare, settings, setSearchQuery } = useAppStore();
   const mediaRef = useRef<View>(null);
   const actionsRef = useRef<View>(null);
 
@@ -420,8 +421,9 @@ export default function NewsCard({
   const buildShareMessage = () => {
     const newsLink = `${NEWS_BASE_URL}/${item._id}`;
     const lines: string[] = [];
-    lines.push(`View news : ${newsLink}`);
-    lines.push(`Download app : ${PLAY_STORE_LINK}`);
+    lines.push(`View Post : ${newsLink}`);
+    lines.push(``);
+    lines.push(`Download App : ${PLAY_STORE_LINK}`);
     return lines.join('\n');
   };
 
@@ -800,7 +802,6 @@ export default function NewsCard({
               <Text
                 style={[
                   styles.title,
-                  styles.clickableTitle,
                   {
                     color: titleColor,
                     fontSize: titleFontSize,
@@ -809,7 +810,12 @@ export default function NewsCard({
                 ]}
               >
                 {item.title}
-                <Text style={styles.titleLinkIcon}> ↗</Text>
+                <Text>{" "}</Text>
+                <Ionicons 
+                  name="link" 
+                  size={titleFontSize * 0.9} 
+                  color={titleColor} 
+                />
               </Text>
             </Pressable>
           ) : (
@@ -921,7 +927,14 @@ export default function NewsCard({
             {hashtags
               .slice(0, descriptionExpanded ? hashtags.length : 3)
               .map((tag, index) => (
-                <Text key={index} style={styles.hashtag}>
+                <Text
+                  key={index}
+                  style={styles.hashtag}
+                  onPress={() => {
+                    setSearchQuery(tag);
+                    router.push('/(tabs)/explore');
+                  }}
+                >
                   #{tag}
                 </Text>
               ))}

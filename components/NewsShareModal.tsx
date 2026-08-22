@@ -58,8 +58,9 @@ export default function NewsShareModal({ visible, item, onClose, onShared }: New
   const composeShareText = () => {
     const newsLink = `${NEWS_BASE_URL}/${item._id}`;
     const lines: string[] = [];
-    lines.push(`View news : ${newsLink}`);
-    lines.push(`Download app : ${APP_LINK}`);
+    lines.push(`View Post : ${newsLink}`);
+    lines.push(``);
+    lines.push(`Download App : ${APP_LINK}`);
     return lines.join('\n');
   };
 

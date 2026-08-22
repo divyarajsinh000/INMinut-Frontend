@@ -278,7 +278,7 @@ const AppGuideOverlay = ({ visible, onFinish }: AppGuideOverlayProps) => {
               </View>
               <View>
                 <Text style={styles.demoLogoTitle}>INMinut</Text>
-                <Text style={styles.demoLogoSub}>News in a minute</Text>
+                <Text style={styles.demoLogoSub}>Read, Feel and Share</Text>
               </View>
             </View>
 

@@ -76,7 +76,7 @@ export default function CustomSplashScreen({
           accessibilityLabel="INMinut"
         />
 
-        <Text style={styles.tagline}>News in a minute</Text>
+        <Text style={styles.tagline}>Read, Feel and Share</Text>
       </Animated.View>
     </View>
   );
