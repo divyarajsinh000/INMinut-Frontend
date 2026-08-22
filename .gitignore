@@ -3,44 +3,44 @@
 # dependencies
 node_modules/
 
-# Expo
+# Expo & Web
 .expo/
 dist/
 web-build/
 expo-env.d.ts
 
-# Native
+# Native & Keystores
 .kotlin/
 *.orig.*
 *.jks
 *.p8
 *.p12
 *.key
+*.pem
 *.mobileprovision
+credentials.json
+credentials/
+google-services.json
+android/app/google-services.json
+inminut-admin-key.json
 
-# Metro
+# Metro & debug
 .metro-health-check*
-
-# debug
 npm-debug.*
 yarn-debug.*
 yarn-error.*
-
-# macOS
 .DS_Store
-*.pem
 
-# local env files
+# Local env files
 .env*.local
 .env
 .env.*
 !.env.example
-# typescript
-*.tsbuildinfo
 
+# Typescript & examples
+*.tsbuildinfo
 app-example
 
-# generated native folders
+# Generated native folders
 /ios
 /android
-inminut-admin-key.json
