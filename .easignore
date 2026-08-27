@@ -45,4 +45,4 @@ app-example
 /ios
 /android
 
-eas-archive/
+!google-services.json
