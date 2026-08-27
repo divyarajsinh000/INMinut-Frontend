@@ -1,4 +1,4 @@
-import { View, FlatList, StyleSheet, RefreshControl, Text, Pressable, Image } from 'react-native';
+import { View, FlatList, StyleSheet, RefreshControl, Text, Pressable, Image, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Image as ExpoImage } from 'expo-image';
@@ -96,6 +96,7 @@ export default function HomeScreen() {
   >(null);
   const newsListRef = useRef<FlatList<FeedItem>>(null);
   const refreshInProgressRef = useRef(false);
+  const skipNextCityPreferenceFetchRef = useRef(false);
 
   const viewedNewsIdsRef = useRef<Set<string>>(new Set());
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
@@ -211,6 +212,29 @@ export default function HomeScreen() {
     newsListRef.current?.scrollToOffset({ offset: 0, animated: true });
   }, [setSelectedCategory, openedNewsId, closeNotificationNews]);
 
+  const selectedPreferenceCities = cities.filter((city) =>
+    selectedCityPreferences.includes(city._id),
+  );
+
+  const handleRemovePreferredCity = useCallback(
+    async (cityId: string) => {
+      const nextCityIds = selectedCityPreferences.filter((id) => id !== cityId);
+
+      // saveCityPreferences updates the persisted preference and store state.
+      // We also fetch immediately so the feed changes as soon as the pill is removed.
+      skipNextCityPreferenceFetchRef.current = true;
+      await saveCityPreferences(nextCityIds);
+      await fetchNews({
+        category: selectedCategory || undefined,
+        cityIds: nextCityIds,
+      });
+
+      viewedNewsIdsRef.current.clear();
+      newsListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    },
+    [selectedCityPreferences, saveCityPreferences, fetchNews, selectedCategory],
+  );
+
   const categorySwipeGesture = Gesture.Pan()
     // Let the news feed keep handling normal vertical scrolling.
     .activeOffsetX([-24, 24])
@@ -233,6 +257,14 @@ export default function HomeScreen() {
 
   useEffect(() => {
     if (!preferencesLoaded) return;
+
+    // Removing a city pill already triggers an immediate request above.
+    // Skip the matching store-change request once to avoid duplicate API calls.
+    if (skipNextCityPreferenceFetchRef.current) {
+      skipNextCityPreferenceFetchRef.current = false;
+      return;
+    }
+
     fetchNews({
       category: selectedCategory || undefined,
       cityIds: selectedCityPreferences,
@@ -437,10 +469,60 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <View
-          style={styles.filterWrapper}
-        >
-          <CategoryFilter categories={categories} selectedCategoryId={selectedCategory} onSelectCategory={handleCategorySelect} />
+        {selectedPreferenceCities.length > 0 && (
+          <View style={styles.selectedCitiesSection}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.selectedCitiesContent}
+            >
+              {selectedPreferenceCities.map((city) => (
+                <View
+                  key={city._id}
+                  style={[
+                    styles.selectedCityPill,
+                    {
+                      backgroundColor: themeStyles.card,
+                      borderColor: themeStyles.border,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name="location"
+                    size={13}
+                    color={AppPalette.brightOrange}
+                  />
+                  <Text
+                    numberOfLines={1}
+                    style={[styles.selectedCityPillText, { color: themeStyles.text }]}
+                  >
+                    {city.name}
+                  </Text>
+                  <Pressable
+                    onPress={() => handleRemovePreferredCity(city._id)}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove ${city.name} city preference`}
+                    style={styles.selectedCityRemove}
+                  >
+                    <Ionicons
+                      name="close-circle"
+                      size={18}
+                      color={AppPalette.brightOrange}
+                    />
+                  </Pressable>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        <View style={styles.filterWrapper}>
+          <CategoryFilter
+            categories={categories}
+            selectedCategoryId={selectedCategory}
+            onSelectCategory={handleCategorySelect}
+          />
         </View>
 
         {!!openedNewsId && (
@@ -621,6 +703,38 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: AppPalette.ink,
     letterSpacing: -0.6,
+  },
+  selectedCitiesSection: {
+    minHeight: 42,
+    paddingTop: 3,
+    paddingBottom: 5,
+  },
+  selectedCitiesContent: {
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    gap: 8,
+  },
+  selectedCityPill: {
+    maxWidth: 190,
+    minHeight: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingLeft: 10,
+    paddingRight: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  selectedCityPillText: {
+    maxWidth: 125,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  selectedCityRemove: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   filterWrapper: { height: 42 },
   feedGestureArea: { flex: 1 },

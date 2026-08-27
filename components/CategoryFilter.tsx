@@ -45,21 +45,34 @@ function CategoryChip({
         activeOpacity={0.82}
         style={[
           styles.categoryItem,
-          { backgroundColor: themeStyles.card, borderColor: themeStyles.border },
-          category.isHighlighted && !selected && styles.highlightedCategory,
-          selected && {
-            backgroundColor: category.backgroundColor || Colors.brightOrange,
-            borderColor: category.backgroundColor || Colors.brightOrange,
+          {
+            backgroundColor:
+              category.isHighlighted || selected
+                ? category.backgroundColor || Colors.brightOrange
+                : themeStyles.card,
+            borderColor:
+              category.isHighlighted || selected
+                ? category.backgroundColor || Colors.brightOrange
+                : themeStyles.border,
           },
+          category.isHighlighted && !selected && styles.highlightedCategory,
         ]}
         onPress={onPress}
       >
         <Text
-          style={[styles.categoryText, { color: selected ? category.textColor || Colors.white : themeStyles.text }]}
+          style={[
+            styles.categoryText,
+            {
+              color:
+                category.isHighlighted || selected
+                  ? category.textColor || Colors.white
+                  : themeStyles.text,
+            },
+          ]}
           numberOfLines={1}
           ellipsizeMode="tail"
         >
-          {category.isHighlighted ? `★ ${category.name}` : category.name}
+          {category.isHighlighted ? `${category.name}` : category.name}
         </Text>
       </TouchableOpacity>
     </Animated.View>
@@ -137,7 +150,6 @@ const styles = StyleSheet.create({
     borderColor: Colors.brightOrange,
   },
   highlightedCategory: {
-    borderColor: '#F59E0B',
     borderWidth: 2,
   },
   categoryText: {

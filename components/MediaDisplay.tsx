@@ -32,6 +32,7 @@ import {
 
 const { width: screenWidth } = Dimensions.get("window");
 const MEDIA_WIDTH = Math.max(260, screenWidth - 64);
+const VIDEO_CARD_HEIGHT = Math.min(560, Math.max(420, Math.round(MEDIA_WIDTH * 1.42)));
 
 interface MediaDisplayProps {
   media: MediaItem[];
@@ -371,7 +372,7 @@ function PdfPreviewModal({
           throw new Error(`Server returned HTTP ${result.status} while loading PDF.`);
         }
 
-        const fileInfo = await FileSystem.getInfoAsync(result.uri, { size: true });
+        const fileInfo = await FileSystem.getInfoAsync(result.uri);
         if (!fileInfo.exists || !fileInfo.size || fileInfo.size < 5) {
           throw new Error("The downloaded PDF file is empty.");
         }
@@ -622,10 +623,10 @@ const styles = StyleSheet.create({
   },
   videoContainer: {
     width: MEDIA_WIDTH,
-    height: Math.min(
-      320,
-      Math.max(220, Math.round(MEDIA_WIDTH * 0.72)),
-    ),
+    // A short fixed landscape box made portrait/Reel videos look tiny.
+    // Use a taller card so 9:16 videos are readable while `contentFit="contain"`
+    // still preserves the complete video without cropping.
+    height: VIDEO_CARD_HEIGHT,
     borderRadius: 18,
     overflow: "hidden",
     backgroundColor: "#111827",
