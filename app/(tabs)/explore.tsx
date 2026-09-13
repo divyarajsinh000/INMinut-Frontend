@@ -3,13 +3,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCallback, useState, useEffect } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import NewsCard from '@/components/NewsCard';
+import EmbedCard from '@/components/EmbedCard';
 import { useAppStore } from '@/store';
-import { NewsItem } from '@/api';
+import { NewsItem, EmbedItem } from '@/api';
 import { AppPalette } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
+type SearchResultItem =
+  | { type: 'news'; data: NewsItem; key: string }
+  | { type: 'embed'; data: EmbedItem; key: string };
+
 export default function SearchScreen() {
-  const { news, setSearchQuery, searchQuery, fetchNews, isLoading } = useAppStore();
+  const { news, embeds, setSearchQuery, searchQuery, fetchNews, fetchEmbeds, isLoading } = useAppStore();
   const [localQuery, setLocalQuery] = useState(searchQuery);
 
   const colorScheme = useColorScheme();
@@ -24,26 +29,44 @@ export default function SearchScreen() {
   };
 
   useEffect(() => {
-    if (localQuery) fetchNews({ search: localQuery });
-  }, [localQuery, fetchNews]);
+    if (localQuery.trim()) {
+      const q = localQuery.trim();
+      fetchNews({ search: q });
+      fetchEmbeds({ search: q });
+    }
+  }, [localQuery, fetchNews, fetchEmbeds]);
 
   const handleSearch = useCallback((text: string) => {
     setLocalQuery(text);
     setSearchQuery(text);
   }, [setSearchQuery]);
 
-  const renderItem = ({ item }: { item: NewsItem }) => <NewsCard item={item} />;
+  const matchingEmbeds = embeds.filter((emb) => {
+    if (emb.isEnabled === false) return false;
+    if (!localQuery.trim()) return false;
+    return emb.title?.toLowerCase().includes(localQuery.trim().toLowerCase());
+  });
+
+  const searchResults: SearchResultItem[] = [
+    ...news.map((item) => ({ type: 'news' as const, data: item, key: `news-${item._id}` })),
+    ...matchingEmbeds.map((emb) => ({ type: 'embed' as const, data: emb, key: `embed-${emb._id}` })),
+  ];
+
+  const renderItem = ({ item }: { item: SearchResultItem }) => {
+    if (item.type === 'embed') return <EmbedCard item={item.data} />;
+    return <NewsCard item={item.data} />;
+  };
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: themeStyles.bg }]}>
       <View style={[styles.container, { backgroundColor: themeStyles.bg }]}>
-        <Text style={[styles.title, { color: themeStyles.text }]}>Search stories</Text>
-        <Text style={[styles.subtitle, { color: themeStyles.textSecondary }]}>Find latest updates by title, city, reporter or keyword.</Text>
+        <Text style={[styles.title, { color: themeStyles.text }]}>Search stories & content</Text>
+        <Text style={[styles.subtitle, { color: themeStyles.textSecondary }]}>Find news and embeds by title, city, reporter or keyword.</Text>
         <View style={[styles.searchContainer, { backgroundColor: themeStyles.card, borderColor: themeStyles.border }]}>
           <Ionicons name="search" size={20} color={themeStyles.textSecondary} />
           <TextInput
             style={[styles.searchInput, { color: themeStyles.text }]}
-            placeholder="Search news..."
+            placeholder="Search news & embed title..."
             placeholderTextColor={isDark ? '#64748B' : '#98A2B3'}
             value={localQuery}
             onChangeText={handleSearch}
@@ -51,11 +74,17 @@ export default function SearchScreen() {
           />
         </View>
 
-        {localQuery ? (
+        {localQuery.trim() ? (
           isLoading ? (
             <Text style={[styles.stateText, { color: themeStyles.textSecondary }]}>Searching...</Text>
-          ) : news.length > 0 ? (
-            <FlatList data={news} renderItem={renderItem} keyExtractor={(item) => item._id} contentContainerStyle={styles.listContainer} showsVerticalScrollIndicator={false} />
+          ) : searchResults.length > 0 ? (
+            <FlatList
+              data={searchResults}
+              renderItem={renderItem}
+              keyExtractor={(item) => item.key}
+              contentContainerStyle={styles.listContainer}
+              showsVerticalScrollIndicator={false}
+            />
           ) : (
             <Text style={[styles.stateText, { color: themeStyles.textSecondary }]}>No results found</Text>
           )

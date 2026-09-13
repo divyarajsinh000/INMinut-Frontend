@@ -26,7 +26,7 @@ import { router } from "expo-router";
 import FullScreenImageViewer from "@/components/FullScreenImageViewer";
 import MediaDisplay from "@/components/MediaDisplay";
 import { shareNewsDirect, shareSingleMediaFile } from "@/utils/share";
-import { getImageMedia, getMediaUrl, isGifMedia } from "@/utils/media";
+import { getImageMedia, getMediaUrl } from "@/utils/media";
 import { captureRef } from "react-native-view-shot";
 let Share: any;
 if (Platform.OS !== "web") {
@@ -364,12 +364,6 @@ export default function NewsCard({
     const hasImage = images.length > 0;
     const firstImage = images[0];
 
-    // View-shot cannot consistently capture animated GIF frames on Android,
-    // which creates a blank white shared image. Share the original GIF file.
-    if (firstImage && isGifMedia(firstImage)) {
-      return shareSingleMediaFile(firstImage, item.title || "Share GIF");
-    }
-
     const firstImageUrl = hasImage
       ? getMediaUrl(firstImage?.url)
       : settings?.defaultShareImage
@@ -438,14 +432,6 @@ export default function NewsCard({
 
     try {
       setWhatsappSharing(true);
-
-      const firstImage = images[0];
-      if (firstImage && isGifMedia(firstImage)) {
-        // Preserve the animation instead of creating a blank JPG capture.
-        const shared = await shareSingleMediaFile(firstImage, item.title || "Share GIF");
-        if (shared !== false) await trackNewsShare(item._id);
-        return;
-      }
 
       const firstImageUrl =
         images.length > 0

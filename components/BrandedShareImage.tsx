@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { StyleSheet, Text, View, Image } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import { Image } from "expo-image";
 import { useEffect, useRef, useState } from "react";
 
 interface Props {
@@ -132,7 +133,7 @@ export default function BrandedShareImage({
     const timer = setTimeout(() => {
       readyReportedRef.current = true;
       onReady?.();
-    }, 80);
+    }, 150);
 
     return () => clearTimeout(timer);
   }, [mainImageLoaded, logoLoaded, onReady]);
@@ -150,7 +151,7 @@ export default function BrandedShareImage({
                   : require("../assets/images/logo.png")
               }
               style={styles.logo}
-              resizeMode="contain"
+              contentFit="contain"
               onLoad={() => setLogoLoaded(true)}
               onError={() => setLogoLoaded(true)}
             />
@@ -193,7 +194,7 @@ export default function BrandedShareImage({
                 : { uri: imageUri }
             }
             style={styles.mainImage}
-            resizeMode={
+            contentFit={
               imageUri === "breaking_placeholder" ? "cover" : "contain"
             }
             onLoad={() => setMainImageLoaded(true)}

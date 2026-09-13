@@ -97,6 +97,7 @@ export interface Category {
   backgroundColor?: string;
   textColor?: string;
   isHighlighted?: boolean;
+  isVisible?: boolean;
 }
 
 export const api = {
@@ -127,9 +128,12 @@ export const api = {
     return response.data.data as Ad[];
   },
 
-  getEmbeds: async () => {
+  getEmbeds: async (params?: { enabledOnly?: boolean; search?: string }) => {
     const response = await apiClient.get('/api/embeds', {
-      params: { enabledOnly: true },
+      params: {
+        enabledOnly: params?.enabledOnly ?? true,
+        search: params?.search,
+      },
     });
     return response.data.data as EmbedItem[];
   },

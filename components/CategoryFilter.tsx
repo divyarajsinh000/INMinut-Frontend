@@ -113,18 +113,20 @@ export default function CategoryFilter({
         </Text>
       </TouchableOpacity>
 
-      {categories.map((category) => {
-        const selected = selectedCategoryId === category._id;
-        return (
-          <CategoryChip
-            key={category._id}
-            category={category}
-            selected={selected}
-            themeStyles={themeStyles}
-            onPress={() => onSelectCategory(category._id)}
-          />
-        );
-      })}
+      {categories
+        .filter((category) => category.isVisible !== false)
+        .map((category) => {
+          const selected = selectedCategoryId === category._id;
+          return (
+            <CategoryChip
+              key={category._id}
+              category={category}
+              selected={selected}
+              themeStyles={themeStyles}
+              onPress={() => onSelectCategory(category._id)}
+            />
+          );
+        })}
     </ScrollView>
   );
 }

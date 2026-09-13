@@ -25,7 +25,7 @@ interface AppState {
 
   fetchNews: (params?: { category?: string; search?: string; cityIds?: string[] }) => Promise<void>;
   fetchAdvertisements: () => Promise<void>;
-  fetchEmbeds: () => Promise<void>;
+  fetchEmbeds: (params?: { search?: string }) => Promise<void>;
   fetchCategories: () => Promise<void>;
   fetchCities: () => Promise<void>;
   fetchSettings: () => Promise<void>;
@@ -85,9 +85,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  fetchEmbeds: async () => {
+  fetchEmbeds: async (params) => {
     try {
-      const embeds = await api.getEmbeds();
+      const embeds = await api.getEmbeds(params);
       set({ embeds });
     } catch (err) {
       console.error('Fetch embeds error:', err);

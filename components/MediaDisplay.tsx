@@ -269,6 +269,19 @@ function VideoPlayer({
         contentFit="contain"
       />
 
+      {isPreview && status !== "error" && (
+        <View style={styles.playButtonOverlay}>
+          <View style={styles.playButtonCircle}>
+            <Ionicons
+              name="play"
+              size={32}
+              color={Colors.white}
+              style={{ marginLeft: 3 }}
+            />
+          </View>
+        </View>
+      )}
+
       {status === "error" && (
         <View style={styles.videoFallback}>
           <Ionicons
@@ -634,6 +647,27 @@ const styles = StyleSheet.create({
   video: {
     width: "100%",
     height: "100%",
+  },
+  playButtonOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.25)",
+  },
+  playButtonCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: Colors.brightOrange,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 8,
+    borderWidth: 3,
+    borderColor: "rgba(255, 255, 255, 0.4)",
   },
   videoFallback: {
     ...StyleSheet.absoluteFillObject,
