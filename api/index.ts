@@ -23,6 +23,7 @@ export interface NewsItem {
   description?: string;
   content?: string;
   category?: { _id: string; name: string; backgroundColor?: string; textColor?: string };
+  categories?: Category[];
   cities?: City[];
   hashtags?: string[];
   publishedDate?: string;

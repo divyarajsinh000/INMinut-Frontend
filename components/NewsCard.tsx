@@ -687,24 +687,35 @@ export default function NewsCard({
       <View style={styles.content}>
         <View style={styles.metaHeader}>
           <View style={styles.categoryCityWrap}>
-            <View
-              style={[
-                styles.categoryBadge,
-                {
-                  backgroundColor:
-                    item.category?.backgroundColor || Colors.brightOrange,
-                },
-              ]}
-            >
-              <Text
+            {((item.categories && item.categories.length > 0)
+              ? item.categories
+              : (item.category ? [item.category] : [])
+            ).map((cat, idx) => (
+              <View
+                key={cat._id || `cat-${idx}`}
                 style={[
-                  styles.categoryText,
-                  { color: item.category?.textColor || Colors.white },
+                  styles.categoryBadge,
+                  {
+                    backgroundColor:
+                      cat.backgroundColor || Colors.brightOrange,
+                  },
                 ]}
               >
-                {item.category?.name || "News"}
-              </Text>
-            </View>
+                <Text
+                  style={[
+                    styles.categoryText,
+                    { color: cat.textColor || Colors.white },
+                  ]}
+                >
+                  {cat.name}
+                </Text>
+              </View>
+            ))}
+            {(!item.categories || item.categories.length === 0) && !item.category && (
+              <View style={[styles.categoryBadge, { backgroundColor: Colors.brightOrange }]}>
+                <Text style={[styles.categoryText, { color: Colors.white }]}>News</Text>
+              </View>
+            )}
 
             {!!item.cities?.length && (
               <View style={styles.cityChipsWrap}>
