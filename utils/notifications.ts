@@ -134,95 +134,57 @@ export const setupAndroidNotificationChannel = async () => {
   });
 };
 
-export const registerGuestForPushNotifications = async () => {
-  try {
-    await setupAndroidNotificationChannel();
-
+// Register an installation even if notification permissions are denied.
+// A push token is an optional property, not proof that the app was installed.
+let registeringGuest: Promise<string | null> | null = null;
+let lastSuccessfulRegistrationAt = 0;
+export const registerGuestForPushNotifications = (): Promise<string | null> => {
+  if (registeringGuest) return registeringGuest;
+  if (Date.now() - lastSuccessfulRegistrationAt < 30 * 60 * 1000) return Promise.resolve(null);
+  registeringGuest = (async () => {
     const deviceId = await getOrCreateDeviceId();
     const guestId = await getOrCreateGuestId();
-
-    if (!Device.isDevice) {
-      logger('Push notifications need a physical device.');
-      return null;
+    let expoPushToken: string | undefined;
+    let notificationsEnabled = false;
+    try {
+      await setupAndroidNotificationChannel();
+      if (Device.isDevice) {
+        const permission = await Notifications.getPermissionsAsync();
+        let status = permission.status;
+        if (status === 'undetermined') {
+          status = (await Notifications.requestPermissionsAsync()).status;
+        }
+        notificationsEnabled = status === 'granted';
+        const projectId = Constants.easConfig?.projectId || Constants.expoConfig?.extra?.eas?.projectId;
+        if (notificationsEnabled && projectId) {
+          expoPushToken = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+        }
+      }
+    } catch (error) {
+      logger('Push token unavailable; registering installation without notifications:', error);
     }
-
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-
-    if (existingStatus !== 'granted') {
-      const permissionResponse = await Notifications.requestPermissionsAsync();
-      finalStatus = permissionResponse.status;
+    try {
+      const saved = await SecureStore.getItemAsync(CITY_PREFERENCES_KEY);
+      let cityPreferences: string[] = [];
+      try {
+        const parsed = saved ? JSON.parse(saved) : [];
+        if (Array.isArray(parsed)) cityPreferences = parsed;
+      } catch { /* ignore corrupt local preferences */ }
+      await api.registerGuestUser({
+        guestId, deviceId, expoPushToken,
+        platform: Platform.OS,
+        deviceName: Device.deviceName || undefined,
+        appVersion: Constants.nativeAppVersion || Constants.expoConfig?.version,
+        notificationsEnabled,
+        cityPreferences,
+      });
+      lastSuccessfulRegistrationAt = Date.now();
+    } catch (error) {
+      logger('Guest device registration failed:', error);
     }
-
-    if (finalStatus !== 'granted') {
-      logger('Notification permission not granted.');
-      return null;
-    }
-
-    const projectId = Constants.easConfig?.projectId || Constants.expoConfig?.extra?.eas?.projectId;
-
-    if (!projectId) {
-      logger('Missing EAS projectId. Run eas init first.');
-      return null;
-    }
-
-    const tokenResponse = await Notifications.getExpoPushTokenAsync({
-      projectId,
-    });
-    const expoPushToken = tokenResponse.data;
-
-    if (!expoPushToken) {
-      logger('Expo returned an empty push token.');
-      return null;
-    }
-
-    const savedCities = await SecureStore.getItemAsync(CITY_PREFERENCES_KEY);
-    const cityPreferences = savedCities ? JSON.parse(savedCities) : [];
-
-    logger('Expo Push Token generated:', expoPushToken);
-    logger('Sending token to backend:', {
-      guestId,
-      deviceId,
-      expoPushToken,
-      platform: Platform.OS,
-      projectId,
-      deviceName: Device.deviceName,
-    });
-
-    const registeredGuest = await api.registerGuestUser({
-      guestId,
-      deviceId,
-      expoPushToken,
-      platform: Platform.OS,
-      deviceName: Device.deviceName || undefined,
-      appVersion: Constants.expoConfig?.version,
-      cityPreferences: Array.isArray(cityPreferences) ? cityPreferences : [],
-    });
-
-    const deviceMatched = Array.isArray(registeredGuest?.devices)
-      ? registeredGuest.devices.find((device: any) => device.deviceId === deviceId || device.expoPushToken === expoPushToken)
-      : null;
-
-    logger('Guest registered successfully:', {
-      id: registeredGuest?._id,
-      guestId: registeredGuest?.guestId,
-      deviceId,
-      expoPushToken,
-      matchedDeviceId: deviceMatched?.deviceId,
-      devicesCount: Array.isArray(registeredGuest?.devices) ? registeredGuest.devices.length : 0,
-      notificationsEnabled: registeredGuest?.notificationsEnabled,
-    });
-
-    return expoPushToken;
-  } catch (error: any) {
-    logger('registerGuestForPushNotifications error:', {
-      message: error?.message,
-      status: error?.response?.status,
-      data: error?.response?.data,
-    });
-
-    return null;
-  }
+    return expoPushToken || null;
+  })().finally(() => { registeringGuest = null; });
+  return registeringGuest;
 };
 
 export const showLocalTestNotification = async () => {

@@ -74,6 +74,11 @@ export interface EmbedItem {
 }
 
 export interface Settings {
+  appUpdates?: {
+    android?: { latestVersion?: string; minimumVersion?: string; storeUrl?: string };
+    ios?: { latestVersion?: string; minimumVersion?: string; storeUrl?: string };
+    updateMessage?: string;
+  };
   appLogo?: string;
   appIcon?: string;
   defaultNewsImage?: string;
@@ -165,7 +170,7 @@ registerGuestUser: async (payload: RegisterGuestPayload) => {
 },
 
   updateGuestNotificationPreference: async (guestId: string, notificationsEnabled: boolean, deviceId?: string) => {
-    const response = await apiClient.patch(`/api/guest-users/${guestId}/preferences`, {
+    const response = await apiClient.patch(`/api/guest-users/${guestId}/notifications`, {
       notificationsEnabled,
       ...(deviceId ? { deviceId } : {}),
     });
@@ -173,7 +178,7 @@ registerGuestUser: async (payload: RegisterGuestPayload) => {
   },
 
   updateGuestCityPreferences: async (guestId: string, cityPreferences: string[]) => {
-    const response = await apiClient.patch(`/api/guest-users/${guestId}/preferences`, {
+    const response = await apiClient.patch(`/api/guest-users/${guestId}/cities`, {
       cityPreferences,
     });
     return response.data.data;

@@ -152,11 +152,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       logger('Guest city preference sync skipped until guest registration exists:', err);
     }
 
-    await get().fetchNews({
-      category: get().selectedCategory || undefined,
-      search: get().searchQuery || undefined,
-      cityIds: uniqueCityIds,
-    });
+    // Home screen refetches via selectedCityPreferences subscription.
+    // Do not issue another request here; it causes duplicate news API calls.
   },
 
   loadSavedNews: async () => {

@@ -21,6 +21,8 @@ import "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
+import OTAUpdateManager from '@/components/OTAUpdateManager';
+import PlayStoreUpdateManager from '@/components/PlayStoreUpdateManager';
 import CustomSplashScreen from "@/components/CustomSplashScreen";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAppStore } from "@/store";
@@ -54,6 +56,7 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
   const loadTheme = useAppStore((state) => state.loadTheme);
   const [showCustomSplash, setShowCustomSplash] = useState(true);
+  const [playCheckFinished, setPlayCheckFinished] = useState(Platform.OS !== "android");
 
   const [loaded, error] = useFonts({
     HindVadodara_300Light,
@@ -122,6 +125,8 @@ export default function RootLayout() {
             <Stack.Screen name="news/[id]" options={{ headerShown: false }} />
           </Stack>
           <StatusBar style="auto" />
+          <PlayStoreUpdateManager onInitialCheckComplete={() => setPlayCheckFinished(true)} />
+          {playCheckFinished && <OTAUpdateManager />}
         </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
