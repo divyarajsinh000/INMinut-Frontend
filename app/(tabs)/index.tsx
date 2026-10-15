@@ -9,6 +9,7 @@ import NewsCard from '@/components/NewsCard';
 import AdCard from '@/components/AdCard';
 import EmbedCard from '@/components/EmbedCard';
 import CategoryFilter from '@/components/CategoryFilter';
+import CityFilter from '@/components/CityFilter';
 import CityPreferenceModal from '@/components/CityPreferenceModal';
 import OnboardingSlider, { hasCompletedOnboarding } from '@/components/OnboardingSlider';
 import AppGuideOverlay, { hasCompletedAppGuide } from '@/components/AppGuideOverlay';
@@ -83,6 +84,9 @@ export default function HomeScreen() {
   };
 
   const [showCityModal, setShowCityModal] = useState(false);
+  // Temporary feed filter; saved city preferences remain unchanged.
+  const [selectedFeedCityId, setSelectedFeedCityId] = useState<string | null>(null);
+  const feedCityRef = useRef<string | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showAppGuide, setShowAppGuide] = useState(false);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
@@ -96,7 +100,6 @@ export default function HomeScreen() {
   >(null);
   const newsListRef = useRef<FlatList<FeedItem>>(null);
   const refreshInProgressRef = useRef(false);
-  const skipNextCityPreferenceFetchRef = useRef(false);
 
   const viewedNewsIdsRef = useRef<Set<string>>(new Set());
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
@@ -144,7 +147,7 @@ export default function HomeScreen() {
 
       await fetchNews({
         category: selectedCategory || undefined,
-        cityIds: savedCityIds,
+        cityIds: feedCityRef.current ? [feedCityRef.current] : savedCityIds,
       });
 
       viewedNewsIdsRef.current.clear();
@@ -216,24 +219,22 @@ export default function HomeScreen() {
     selectedCityPreferences.includes(city._id),
   );
 
-  const handleRemovePreferredCity = useCallback(
-    async (cityId: string) => {
-      const nextCityIds = selectedCityPreferences.filter((id) => id !== cityId);
+  const handleFeedCitySelect = useCallback((cityId: string | null) => {
+    if (feedCityRef.current === cityId) return;
+    feedCityRef.current = cityId;
+    setSelectedFeedCityId(cityId);
+    if (openedNewsId) closeNotificationNews();
+    viewedNewsIdsRef.current.clear();
+    newsListRef.current?.scrollToOffset({ offset: 0, animated: true });
+  }, [openedNewsId, closeNotificationNews]);
 
-      // saveCityPreferences updates the persisted preference and store state.
-      // We also fetch immediately so the feed changes as soon as the pill is removed.
-      skipNextCityPreferenceFetchRef.current = true;
-      await saveCityPreferences(nextCityIds);
-      await fetchNews({
-        category: selectedCategory || undefined,
-        cityIds: nextCityIds,
-      });
-
-      viewedNewsIdsRef.current.clear();
-      newsListRef.current?.scrollToOffset({ offset: 0, animated: true });
-    },
-    [selectedCityPreferences, saveCityPreferences, fetchNews, selectedCategory],
-  );
+  const handleRemovePreferredCity = useCallback(async (cityId: string) => {
+    const nextCityIds = selectedCityPreferences.filter((id) => id !== cityId);
+    await saveCityPreferences(nextCityIds);
+    // The news effect reacts to the store preference change.
+    viewedNewsIdsRef.current.clear();
+    newsListRef.current?.scrollToOffset({ offset: 0, animated: true });
+  }, [selectedCityPreferences, saveCityPreferences]);
 
   const categorySwipeGesture = Gesture.Pan()
     // Let the news feed keep handling normal vertical scrolling.
@@ -258,18 +259,11 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!preferencesLoaded) return;
 
-    // Removing a city pill already triggers an immediate request above.
-    // Skip the matching store-change request once to avoid duplicate API calls.
-    if (skipNextCityPreferenceFetchRef.current) {
-      skipNextCityPreferenceFetchRef.current = false;
-      return;
-    }
-
     fetchNews({
       category: selectedCategory || undefined,
-      cityIds: selectedCityPreferences,
+      cityIds: selectedFeedCityId ? [selectedFeedCityId] : selectedCityPreferences,
     });
-  }, [selectedCategory, selectedCityPreferences, preferencesLoaded, fetchNews]);
+  }, [selectedCategory, selectedCityPreferences, selectedFeedCityId, preferencesLoaded, fetchNews]);
 
 
   useEffect(() => {
@@ -517,6 +511,13 @@ export default function HomeScreen() {
           </View>
         )}
 
+    <View style={styles.filterWrapper}>
+          <CityFilter
+            cities={cities}
+            selectedCityId={selectedFeedCityId}
+            onSelectCity={handleFeedCitySelect}
+          />
+        </View>
         <View style={styles.filterWrapper}>
           <CategoryFilter
             categories={categories}
@@ -524,6 +525,8 @@ export default function HomeScreen() {
             onSelectCategory={handleCategorySelect}
           />
         </View>
+
+    
 
         {!!openedNewsId && (
           <View style={[styles.notificationNewsBar, { backgroundColor: themeStyles.card, borderColor: themeStyles.border }]}>

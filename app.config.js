@@ -18,7 +18,7 @@ export default ({ config }) => ({
   updates: {
     url: "https://u.expo.dev/42677210-2162-4706-9726-10b3c163210b",
     fallbackToCacheTimeout: 0,
-    checkAutomatically: "ON_LOAD",
+    checkAutomatically: "NEVER",
   },
 
   ios: {
