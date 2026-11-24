@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { NewsItem, Category, City, Ad, EmbedItem, Settings, api } from '@/api';
+import { NewsItem, Category, City, Ad, EmbedItem, Settings, NewsQuery, api } from '@/api';
 import * as SecureStore from '@/utils/storage';
 import { getOrCreateGuestId } from '@/utils/notifications';
 import { logger } from '@/utils/logger';
@@ -23,8 +23,8 @@ interface AppState {
   error: string | null;
   theme: 'light' | 'dark';
 
-  fetchNews: (params?: { category?: string; search?: string; cityIds?: string[] }) => Promise<void>;
-  fetchAdvertisements: () => Promise<void>;
+  fetchNews: (params?: NewsQuery) => Promise<void>;
+  fetchAdvertisements: (cityIds?: string[]) => Promise<void>;
   fetchEmbeds: (params?: { search?: string }) => Promise<void>;
   fetchCategories: () => Promise<void>;
   fetchCities: () => Promise<void>;
@@ -46,6 +46,9 @@ interface AppState {
   trackEmbedInteraction: (embedId: string, action: 'view' | 'click') => Promise<void>;
 }
 
+let newsRequest = 0;
+let adRequest = 0;
+
 export const useAppStore = create<AppState>((set, get) => ({
   news: [],
   advertisements: [],
@@ -63,25 +66,28 @@ export const useAppStore = create<AppState>((set, get) => ({
   theme: 'light',
 
   fetchNews: async (params) => {
+    const request = ++newsRequest;
     try {
       set({ isLoading: true, error: null });
       const cityIds = params?.cityIds ?? get().selectedCityPreferences;
       const news = await api.getNews({ ...params, cityIds });
-      set({ news, isLoading: false });
+      if (request === newsRequest) set({ news, isLoading: false });
     } catch (err) {
+      if (request !== newsRequest) return;
       console.error('Fetch news error:', err);
       const msg = (err as any)?.response?.data?.message || 'Failed to load news';
       set({ error: msg, isLoading: false });
     }
   },
 
-  fetchAdvertisements: async () => {
+  fetchAdvertisements: async (cityIds) => {
+    const request = ++adRequest;
     try {
-      const advertisements = await api.getAdvertisements();
-      set({ advertisements });
+      const advertisements = await api.getAdvertisements(cityIds);
+      if (request === adRequest) set({ advertisements });
     } catch (err) {
       console.error('Fetch advertisements error:', err);
-      set({ advertisements: [] });
+      if (request === adRequest) set({ advertisements: [] });
     }
   },
 

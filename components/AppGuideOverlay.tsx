@@ -53,8 +53,8 @@ const guideSteps: GuideStep[] = [
   {
     key: 'categories',
     icon: 'options-outline',
-    title: 'Filter by category',
-    body: 'Use the category chips to quickly switch between different types of news.',
+    title: 'Filter your news',
+    body: 'Tap the round center Filter button to choose cities, categories and publication dates.',
   },
   {
     key: 'media',
@@ -111,7 +111,7 @@ const AppGuideOverlay = ({ visible, onFinish }: AppGuideOverlayProps) => {
     const headerHeight = 58;
     const categoryTop = headerTop + headerHeight + 10;
     const categoryHeight = 40;
-    const cardTop = categoryTop + categoryHeight + 10;
+    const cardTop = headerTop + headerHeight + 10;
     const cardWidth = contentWidth;
     const cardMediaHeight = Math.min(210, Math.max(150, height * 0.24));
     const cardBodyHeight = 170;
@@ -144,11 +144,11 @@ const AppGuideOverlay = ({ visible, onFinish }: AppGuideOverlayProps) => {
         radius: 14,
       },
       categories: {
-        top: categoryTop,
-        left: side,
-        width: contentWidth,
-        height: categoryHeight,
-        radius: 18,
+        top: tabTop - 12,
+        left: width / 2 - 32,
+        width: 64,
+        height: 64,
+        radius: 32,
       },
       media: {
         top: cardTop,
@@ -303,37 +303,6 @@ const AppGuideOverlay = ({ visible, onFinish }: AppGuideOverlayProps) => {
 
           <View
             style={[
-              styles.demoCategories,
-              {
-                top: metrics.categoryTop,
-                left: metrics.side,
-                width: metrics.contentWidth,
-                height: metrics.categoryHeight,
-              },
-            ]}
-          >
-            {['All', 'Local', 'Sports', 'Business'].map((item, index) => (
-              <View
-                key={item}
-                style={[
-                  styles.demoCategoryChip,
-                  index === 0 && styles.demoCategoryChipActive,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.demoCategoryText,
-                    index === 0 && styles.demoCategoryTextActive,
-                  ]}
-                >
-                  {item}
-                </Text>
-              </View>
-            ))}
-          </View>
-
-          <View
-            style={[
               styles.demoCard,
               {
                 top: metrics.cardTop,
@@ -435,23 +404,24 @@ const AppGuideOverlay = ({ visible, onFinish }: AppGuideOverlayProps) => {
             {[
               ['home', 'Home'],
               ['search-outline', 'Search'],
+              ['options-outline', 'Filter'],
               ['bookmark-outline', 'Saved'],
               ['person-outline', 'Profile'],
             ].map(([icon, label], index) => (
-              <View key={label} style={styles.demoTabItem}>
+              <View key={label} style={[styles.demoTabItem, label === 'Filter' && styles.demoFilterButton]}>
                 <Ionicons
                   name={icon as IoniconName}
                   size={22}
-                  color={index === 0 ? AppPalette.brightOrange : '#94A3B8'}
+                  color={label === 'Filter' ? '#FFFFFF' : index === 0 ? AppPalette.brightOrange : '#94A3B8'}
                 />
-                <Text
+                {label !== 'Filter' && <Text
                   style={[
                     styles.demoTabText,
                     index === 0 && styles.demoTabTextActive,
                   ]}
                 >
                   {label}
-                </Text>
+                </Text>}
               </View>
             ))}
           </View>
@@ -835,12 +805,14 @@ const styles = StyleSheet.create({
   },
 
   demoTabItem: {
-    minWidth: 62,
+    flex: 1,
+    minWidth: 0,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 3,
   },
 
+  demoFilterButton: { flex: 0, width: 58, height: 58, borderRadius: 29, marginTop: -20, backgroundColor: AppPalette.brightOrange, justifyContent: 'center', borderWidth: 3, borderColor: '#FFFFFF' },
   demoTabText: {
     fontSize: 10.5,
     fontWeight: '800',

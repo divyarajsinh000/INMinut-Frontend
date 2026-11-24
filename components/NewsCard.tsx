@@ -50,6 +50,7 @@ const PLAY_STORE_LINK =
 
 interface NewsCardProps {
   item: NewsItem;
+  onOpen?: () => void;
   onMediaLayout?: (layout: {
     x: number;
     y: number;
@@ -93,11 +94,13 @@ const normalizeExternalUrl = (value: unknown) => {
 
 export default function NewsCard({
   item,
+  onOpen,
   onMediaLayout,
   onActionsLayout,
 }: NewsCardProps) {
   const { savedNews, toggleSavedNews, likedNews, toggleLikedNews, trackNewsShare, settings, setSearchQuery } = useAppStore();
   const mediaRef = useRef<View>(null);
+  const imageScrollRef = useRef<ScrollView>(null);
   const actionsRef = useRef<View>(null);
 
   const handleMediaLayout = () => {
@@ -248,11 +251,11 @@ export default function NewsCard({
     const html = item.description || "";
     const linkMatches = [...html.matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/gi)];
     if (!linkMatches.length) {
-      return [{ text: displayText, isLink: false }];
+      return [{ text: displayText, isLink: false, href: undefined }];
     }
 
     const visibleText = displayText.replace(/\s+/g, " ").trim();
-    const segments: Array<{ text: string; isLink: boolean }> = [];
+    const segments: Array<{ text: string; isLink: boolean; href?: string }> = [];
     let cursor = 0;
 
     for (const match of linkMatches) {
@@ -265,7 +268,8 @@ export default function NewsCard({
       const before = visibleText.slice(cursor, index);
       if (before) segments.push({ text: before, isLink: false });
 
-      segments.push({ text: linkText, isLink: true });
+      const href = match[0].match(/\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
+      segments.push({ text: linkText, isLink: true, href: href?.[1] || href?.[2] || href?.[3] });
       cursor = index + linkText.length;
     }
 
@@ -274,7 +278,7 @@ export default function NewsCard({
 
     return segments.length > 0
       ? segments
-      : [{ text: visibleText, isLink: false }];
+      : [{ text: visibleText, isLink: false, href: undefined }];
   })();
 
   const getImageHeight = (media?: MediaItem) => {
@@ -578,6 +582,7 @@ export default function NewsCard({
           style={[styles.imageWrap, { height: activeImageHeight }]}
         >
           <ScrollView
+            ref={imageScrollRef}
             horizontal
             bounces={false}
             overScrollMode="never"
@@ -663,7 +668,7 @@ export default function NewsCard({
               {images.map((_, index) => (
                 <Pressable
                   key={index}
-                  onPress={() => setActiveImageIndex(index)}
+                  onPress={() => { setActiveImageIndex(index); imageScrollRef.current?.scrollTo({ x: index * mediaWidth, animated: true }); }}
                   style={[
                     styles.imageDot,
                     index === activeImageIndex && styles.imageDotActive,
@@ -685,7 +690,7 @@ export default function NewsCard({
       null}
 
       <View style={styles.content}>
-        <View style={styles.metaHeader}>
+        <Pressable onPress={onOpen} disabled={!onOpen} style={styles.metaHeader}>
           <View style={styles.categoryCityWrap}>
             {((item.categories && item.categories.length > 0)
               ? item.categories
@@ -761,9 +766,10 @@ export default function NewsCard({
               </Text>
             </View>
           )}
-        </View>
+        </Pressable>
 
         {item.isBreaking && images.length === 0 && (
+          <Pressable onPress={onOpen} disabled={!onOpen}>
           <Animated.View
             style={[
               styles.inlineBreakingBadge,
@@ -787,14 +793,16 @@ export default function NewsCard({
               {breakingLabel}
             </Text>
           </Animated.View>
+          </Pressable>
         )}
 
-        {!!item.title &&
-          (titleLink ? (
+        {!!item.title && (
+          <View style={styles.titleRow}>
             <Pressable
-              onPress={handleOpenTitleLink}
-              style={styles.titleLinkButton}
-              hitSlop={6}
+              onPress={titleLink ? handleOpenTitleLink : onOpen}
+              disabled={!onOpen && !titleLink}
+              style={styles.titleTextButton}
+              accessibilityRole={onOpen || titleLink ? "button" : undefined}
             >
               <Text
                 style={[
@@ -803,32 +811,26 @@ export default function NewsCard({
                     color: titleColor,
                     fontSize: titleFontSize,
                     lineHeight: Math.round(titleFontSize * 1.28),
+                    marginBottom: 0,
                   },
                 ]}
               >
                 {item.title}
-                <Text>{" "}</Text>
-                <Ionicons 
-                  name="link" 
-                  size={titleFontSize * 0.9} 
-                  color={titleColor} 
-                />
               </Text>
             </Pressable>
-          ) : (
-            <Text
-              style={[
-                styles.title,
-                {
-                  color: titleColor,
-                  fontSize: titleFontSize,
-                  lineHeight: Math.round(titleFontSize * 1.28),
-                },
-              ]}
-            >
-              {item.title}
-            </Text>
-          ))}
+            {!!titleLink && (
+              <TouchableOpacity
+                onPress={handleOpenTitleLink}
+                style={styles.titleLinkIconButton}
+                accessibilityRole="link"
+                accessibilityLabel="Open original news link"
+                hitSlop={6}
+              >
+                <Ionicons name="link" size={Math.round(titleFontSize * 0.88)} color={titleColor} />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
         {!!item.description && (
           <View style={styles.descriptionWrap}>
             {descriptionExpanded ? (
@@ -873,11 +875,7 @@ export default function NewsCard({
                 </TouchableOpacity>
               </>
             ) : (
-              <Pressable
-                onPress={() =>
-                  renderedLines.length > 5 && setDescriptionExpanded(true)
-                }
-              >
+              <View>
                 <Text
                   style={[
                     styles.description,
@@ -892,6 +890,13 @@ export default function NewsCard({
                   {collapsedDescriptionSegments.map((segment, index) => (
                     <Text
                       key={`${segment.text}-${index}`}
+                      onPress={() => {
+                        if (segment.isLink && segment.href) {
+                          const url = normalizeExternalUrl(segment.href);
+                          if (url) void Linking.openURL(url).catch(() => Alert.alert("Unable to open link"));
+                        } else if (onOpen) onOpen();
+                        else if (renderedLines.length > 5) setDescriptionExpanded(true);
+                      }}
                       style={
                         segment.isLink
                           ? [
@@ -905,12 +910,16 @@ export default function NewsCard({
                     </Text>
                   ))}
                   {renderedLines.length > 5 && (
-                    <Text style={styles.inlineReadMore}> ... Read more</Text>
+                    <Text style={styles.inlineReadMore} onPress={() => onOpen ? onOpen() : setDescriptionExpanded(true)}> ... Read more</Text>
                   )}
                 </Text>
-              </Pressable>
+              </View>
             )}
           </View>
+        )}
+
+        {onOpen && !!item.content?.trim() && !item.description?.trim() && (
+          <Pressable onPress={onOpen} style={styles.descriptionMoreButton}><Text style={styles.descriptionMoreText}>Read full story</Text><Ionicons name="chevron-forward" size={15} color={AppPalette.brightOrange} /></Pressable>
         )}
 
         {!!nonImageMedia.length && (
@@ -940,7 +949,7 @@ export default function NewsCard({
 
         <View style={styles.footer}>
           {!item.hideReporter && !!(item.reporter?.name?.trim() || item.reporter?.avatar?.trim()) && (
-            <View style={styles.reporterContainer}>
+            <Pressable onPress={onOpen} disabled={!onOpen} style={styles.reporterContainer}>
               {!!item.reporter?.avatar?.trim() && (
                 <Image
                   source={{ uri: getMediaUrl(item.reporter.avatar) }}
@@ -956,7 +965,7 @@ export default function NewsCard({
                   {item.reporter.name}
                 </Text>
               )}
-            </View>
+            </Pressable>
           )}
 
           <View
@@ -1279,7 +1288,20 @@ const styles = StyleSheet.create({
     paddingTop: 4,
   },
   date: { fontSize: 12, color: AppPalette.muted, fontWeight: "700" },
-  titleLinkButton: { alignSelf: "stretch" },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 8,
+  },
+  titleTextButton: { flex: 1, minWidth: 0 },
+  titleLinkIconButton: {
+    flexShrink: 0,
+    marginLeft: 5,
+    paddingTop: 3,
+    paddingHorizontal: 3,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   title: {
     fontFamily: "HindVadodara_700Bold",
     fontSize: 20,

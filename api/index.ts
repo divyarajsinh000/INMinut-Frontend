@@ -49,6 +49,7 @@ export interface NewsItem {
 }
 
 export interface Ad {
+  cities?: (City | string)[];
   _id: string;
   name: string;
   label: string;
@@ -106,16 +107,22 @@ export interface Category {
   isVisible?: boolean;
 }
 
+export interface NewsQuery {
+  category?: string;
+  search?: string;
+  cityIds?: string[];
+  stateId?: string;
+  dateFilter?: 'today';
+  date?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
 export const api = {
-  getNews: async (params?: {
-    category?: string;
-    search?: string;
-    cityIds?: string[];
-  }) => {
+  getNews: async (params?: NewsQuery) => {
     const response = await apiClient.get('/api/news', {
       params: {
-        category: params?.category,
-        search: params?.search,
+        ...params,
         cityIds: params?.cityIds?.length ? JSON.stringify(params.cityIds) : undefined,
       },
     });
@@ -127,9 +134,9 @@ export const api = {
     return response.data.data as NewsItem;
   },
 
-  getAdvertisements: async () => {
+  getAdvertisements: async (cityIds?: string[]) => {
     const response = await apiClient.get('/api/advertisements', {
-      params: { enabledOnly: true },
+      params: { enabledOnly: true, cityIds: cityIds?.length ? JSON.stringify(cityIds) : undefined },
     });
     return response.data.data as Ad[];
   },
@@ -186,7 +193,7 @@ registerGuestUser: async (payload: RegisterGuestPayload) => {
 
   trackNewsInteraction: async (
     newsId: string,
-    payload: { guestId: string; action: 'view' | 'save' | 'unsave' | 'share'; metadata?: Record<string, unknown> }
+    payload: { guestId: string; action: 'view' | 'save' | 'unsave' | 'share' | 'like' | 'unlike'; metadata?: Record<string, unknown> }
   ) => {
     const response = await apiClient.post(`/api/news/${newsId}/track`, payload);
     return response.data.data as {
@@ -196,6 +203,7 @@ registerGuestUser: async (payload: RegisterGuestPayload) => {
       viewCount: number;
       saveCount: number;
       shareCount: number;
+      likeCount: number;
     };
   },
 

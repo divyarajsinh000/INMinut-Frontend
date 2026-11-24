@@ -1,5 +1,7 @@
-import { Tabs } from 'expo-router';
+import { Tabs, router } from 'expo-router';
 import React from 'react';
+import { View, StyleSheet } from 'react-native';
+import { AppPalette } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -25,8 +27,9 @@ export default function TabLayout() {
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarHideOnKeyboard: true,
+        tabBarIconStyle: { overflow: 'visible' },
         tabBarStyle: {
-          height: 58 + bottomSafeSpace,
+          height: 68 + bottomSafeSpace,
           paddingTop: 8,
           paddingBottom: bottomSafeSpace,
           borderTopWidth: 0,
@@ -80,6 +83,27 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
+        name="filter"
+        listeners={{ tabPress: (event) => {
+          event.preventDefault();
+          router.navigate({ pathname: '/(tabs)', params: { openFilters: String(Date.now()) } });
+        } }}
+        options={{
+          title: 'Filter',
+          tabBarShowLabel: true,
+          tabBarLabel: 'Filter',
+          tabBarLabelStyle: { fontSize: 11, fontWeight: '800', color: AppPalette.brightOrange, marginTop: 4 },
+          tabBarItemStyle: { paddingTop: 0, overflow: 'visible' },
+          tabBarAccessibilityLabel: 'Open news filters',
+          tabBarIcon: () => (
+            <View style={[styles.filterButton, { borderColor: colorScheme === 'dark' ? '#111111' : '#FFFFFF' }]}>
+              <Ionicons name="options-outline" size={29} color="#FFFFFF" />
+            </View>
+          ),
+        }}
+      />
+
+      <Tabs.Screen
         name="saved"
         options={{
           title: 'Saved',
@@ -116,3 +140,8 @@ export default function TabLayout() {
     </Tabs>
   );
 }
+const styles = StyleSheet.create({
+  filterButton: { width: 62, height: 62, borderRadius: 31, backgroundColor: AppPalette.brightOrange,
+    borderWidth: 4, alignItems: 'center', justifyContent: 'center', marginTop: -20,
+    elevation: 8, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
+});

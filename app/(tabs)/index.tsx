@@ -3,13 +3,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Image as ExpoImage } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import NewsCard from '@/components/NewsCard';
 import AdCard from '@/components/AdCard';
 import EmbedCard from '@/components/EmbedCard';
-import CategoryFilter from '@/components/CategoryFilter';
-import CityFilter from '@/components/CityFilter';
+import NewsFilterSheet, { type NewsDateFilter } from '@/components/NewsFilterSheet';
 import CityPreferenceModal from '@/components/CityPreferenceModal';
 import OnboardingSlider, { hasCompletedOnboarding } from '@/components/OnboardingSlider';
 import AppGuideOverlay, { hasCompletedAppGuide } from '@/components/AppGuideOverlay';
@@ -39,6 +39,7 @@ export default function HomeScreen() {
   const params = useLocalSearchParams<{
     newsId?: string | string[];
     newsSource?: string | string[];
+    openFilters?: string | string[];
   }>();
 
   const incomingNewsId = Array.isArray(params.newsId)
@@ -83,10 +84,19 @@ export default function HomeScreen() {
     textSecondary: isDark ? '#94A3B8' : '#475569',
   };
 
+  const [showFilters, setShowFilters] = useState(false);
+  const [stateId, setStateId] = useState<string | null>(null);
+  const [dateFilter, setDateFilter] = useState<NewsDateFilter>({ mode: 'all' });
+  useEffect(() => {
+    if (!params.openFilters) return;
+    setShowFilters(true);
+    router.setParams({ openFilters: undefined });
+  }, [params.openFilters]);
   const [showCityModal, setShowCityModal] = useState(false);
   // Temporary feed filter; saved city preferences remain unchanged.
   const [selectedFeedCityId, setSelectedFeedCityId] = useState<string | null>(null);
-  const feedCityRef = useRef<string | null>(null);
+  const isFocused = useIsFocused();
+  const [fetchVersion, setFetchVersion] = useState(0);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showAppGuide, setShowAppGuide] = useState(false);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
@@ -120,7 +130,7 @@ export default function HomeScreen() {
     setIsRefreshingAll(true);
 
     try {
-      const [savedCityIds, onboardingDone, cityPreferenceSetupDone, appGuideDone] = await Promise.all([
+      const [, onboardingDone, cityPreferenceSetupDone, appGuideDone] = await Promise.all([
         loadCityPreferences(),
         hasCompletedOnboarding(),
         SecureStore.getItemAsync(CITY_PREFERENCE_SETUP_KEY),
@@ -129,7 +139,6 @@ export default function HomeScreen() {
 
       await Promise.all([
         fetchCategories(),
-        fetchAdvertisements(),
         fetchEmbeds(),
         fetchCities(),
         fetchSettings(),
@@ -145,11 +154,7 @@ export default function HomeScreen() {
         setShowAppGuide(true);
       }
 
-      await fetchNews({
-        category: selectedCategory || undefined,
-        cityIds: feedCityRef.current ? [feedCityRef.current] : savedCityIds,
-      });
-
+      setFetchVersion(v => v + 1);
       viewedNewsIdsRef.current.clear();
       setPreferencesLoaded(true);
     } finally {
@@ -157,16 +162,13 @@ export default function HomeScreen() {
       setIsRefreshingAll(false);
     }
   }, [
-    fetchAdvertisements,
     fetchCategories,
     fetchCities,
     fetchEmbeds,
-    fetchNews,
     fetchSettings,
     loadCityPreferences,
     loadLikedNews,
     loadSavedNews,
-    selectedCategory,
   ]);
 
   
@@ -215,23 +217,16 @@ export default function HomeScreen() {
     newsListRef.current?.scrollToOffset({ offset: 0, animated: true });
   }, [setSelectedCategory, openedNewsId, closeNotificationNews]);
 
-  const selectedPreferenceCities = cities.filter((city) =>
-    selectedCityPreferences.includes(city._id),
-  );
-
   const handleFeedCitySelect = useCallback((cityId: string | null) => {
-    if (feedCityRef.current === cityId) return;
-    feedCityRef.current = cityId;
     setSelectedFeedCityId(cityId);
     if (openedNewsId) closeNotificationNews();
     viewedNewsIdsRef.current.clear();
     newsListRef.current?.scrollToOffset({ offset: 0, animated: true });
   }, [openedNewsId, closeNotificationNews]);
 
+  const selectedPreferenceCities = cities.filter(city => selectedCityPreferences.includes(city._id));
   const handleRemovePreferredCity = useCallback(async (cityId: string) => {
-    const nextCityIds = selectedCityPreferences.filter((id) => id !== cityId);
-    await saveCityPreferences(nextCityIds);
-    // The news effect reacts to the store preference change.
+    await saveCityPreferences(selectedCityPreferences.filter(id => id !== cityId));
     viewedNewsIdsRef.current.clear();
     newsListRef.current?.scrollToOffset({ offset: 0, animated: true });
   }, [selectedCityPreferences, saveCityPreferences]);
@@ -256,14 +251,26 @@ export default function HomeScreen() {
     loadData();
   }, [loadData]);
 
+  // Use primitive keys so refreshed city/preference arrays do not cause duplicate requests.
+  const cityKey = JSON.stringify(stateId
+    ? cities.filter(c => c.state?._id === stateId).map(c => c._id).sort()
+    : selectedFeedCityId === null ? [...selectedCityPreferences].sort()
+    : selectedFeedCityId ? [selectedFeedCityId] : []);
+  const dateMode = dateFilter.mode;
+  const selectedDate = dateFilter.mode === 'date' ? dateFilter.date : undefined;
   useEffect(() => {
-    if (!preferencesLoaded) return;
-
-    fetchNews({
+    if (!preferencesLoaded || !isFocused || isRefreshingAll) return;
+    const ids: string[] = JSON.parse(cityKey);
+    void fetchNews({
       category: selectedCategory || undefined,
-      cityIds: selectedFeedCityId ? [selectedFeedCityId] : selectedCityPreferences,
+      cityIds: stateId ? [] : ids,
+      stateId: stateId || undefined,
+      dateFilter: dateMode === 'today' ? 'today' : undefined,
+      date: selectedDate,
     });
-  }, [selectedCategory, selectedCityPreferences, selectedFeedCityId, preferencesLoaded, fetchNews]);
+    void fetchAdvertisements(ids);
+  }, [selectedCategory, cityKey, stateId, dateMode, selectedDate, preferencesLoaded,
+    isFocused, isRefreshingAll, fetchVersion, fetchNews, fetchAdvertisements]);
 
 
   useEffect(() => {
@@ -407,6 +414,10 @@ export default function HomeScreen() {
     return (
       <NewsCard
         item={item.data}
+        onOpen={() => router.push({
+          pathname: '/news/reader',
+          params: { id: item.data._id },
+        })}
       />
     );
   };
@@ -511,23 +522,6 @@ export default function HomeScreen() {
           </View>
         )}
 
-    <View style={styles.filterWrapper}>
-          <CityFilter
-            cities={cities}
-            selectedCityId={selectedFeedCityId}
-            onSelectCity={handleFeedCitySelect}
-          />
-        </View>
-        <View style={styles.filterWrapper}>
-          <CategoryFilter
-            categories={categories}
-            selectedCategoryId={selectedCategory}
-            onSelectCategory={handleCategorySelect}
-          />
-        </View>
-
-    
-
         {!!openedNewsId && (
           <View style={[styles.notificationNewsBar, { backgroundColor: themeStyles.card, borderColor: themeStyles.border }]}>
             <View style={styles.notificationNewsBarTextWrap}>
@@ -555,31 +549,52 @@ export default function HomeScreen() {
                   <Text style={styles.backToFeedButtonText}>Back to all news</Text>
                 </Pressable>
               </View>
-            ) : isLoading && news.length === 0 ? (
-              <Text style={[styles.stateText, { color: themeStyles.textSecondary }]}>Loading fresh stories...</Text>
-            ) : error ? (
-              <Text style={styles.errorText}>{error}</Text>
             ) : (
               <FlatList
                 ref={newsListRef}
-                data={displayedFeedItems}
+                data={error ? [] : displayedFeedItems}
                 renderItem={renderItem}
                 keyExtractor={(item) =>
                   item.type === 'news' ? `news-${item.data._id}` : item.key
                 }
-                contentContainerStyle={styles.listContainer}
+                contentContainerStyle={[styles.listContainer, { flexGrow: 1 }]}
                 style={styles.newsList}
                 scrollIndicatorInsets={{ bottom: 96 }}
                 showsVerticalScrollIndicator={false}
-                ListEmptyComponent={<Text style={styles.stateText}>No news found for selected filters.</Text>}
+                ListEmptyComponent={<View>
+                  <Text style={[styles.stateText, { color: error ? AppPalette.danger : themeStyles.textSecondary }]}>{error || (isLoading || isRefreshingAll || !preferencesLoaded ? 'Loading fresh stories...' : 'No news found for selected filters.')}</Text>
+                  {!!error && <Pressable onPress={loadData} style={{ alignSelf: 'center', padding: 16 }}><Text style={{ color: AppPalette.brightOrange, fontWeight: '800' }}>Retry</Text></Pressable>}
+                </View>}
                 onViewableItemsChanged={onViewableItemsChanged}
                 viewabilityConfig={viewabilityConfig}
-                refreshControl={<RefreshControl refreshing={isRefreshingAll} onRefresh={loadData} tintColor={AppPalette.brightOrange} />}
+                refreshControl={<RefreshControl refreshing={isRefreshingAll || isLoading} onRefresh={loadData} tintColor={AppPalette.brightOrange} />}
               />
             )}
           </View>
         </GestureDetector>
 
+        <NewsFilterSheet
+          visible={showFilters}
+          cities={cities}
+          categories={categories}
+          preferredCityIds={selectedCityPreferences}
+          cityId={selectedFeedCityId}
+          stateId={stateId}
+          categoryId={selectedCategory}
+          dateFilter={dateFilter}
+          onClose={() => setShowFilters(false)}
+          onApply={(filters) => {
+            handleCategorySelect(filters.categoryId);
+            handleFeedCitySelect(filters.cityId);
+            setStateId(filters.stateId);
+            setDateFilter(filters.dateFilter);
+            setFetchVersion(v => v + 1);
+            if (openedNewsId) closeNotificationNews();
+            viewedNewsIdsRef.current.clear();
+            newsListRef.current?.scrollToOffset({ offset: 0, animated: false });
+            setShowFilters(false);
+          }}
+        />
         <OnboardingSlider
           visible={showOnboarding}
           onDone={() => {
