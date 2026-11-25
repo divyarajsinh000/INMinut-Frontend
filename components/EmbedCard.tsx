@@ -1,5 +1,6 @@
 import {
   Alert,
+  ActivityIndicator,
   Linking,
   Platform,
   Share,
@@ -14,9 +15,10 @@ import { EmbedItem } from "@/api";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useEffect, useMemo, useRef, useCallback, useState } from "react";
 import { useAppStore } from "@/store";
+import { getEmbedSizing, embedSizingCss, embedSizingScript } from "@/utils/embedSizing";
 
 interface EmbedCardProps {
-  item: EmbedItem;
+  item: EmbedItem & { width?: number | null; autoSize?: boolean; shareUrl?: string };
 }
 
 const normalizeProtocolUrl = (value: string) => {
@@ -166,6 +168,8 @@ const externalContentUrl = (value: string) => {
 const generateHtml = (
   embedCode: string,
   isDark: boolean,
+  sizing: ReturnType<typeof getEmbedSizing>,
+  messageKey: string,
 ) => `<!DOCTYPE html>
 <html>
   <head>
@@ -182,7 +186,7 @@ const generateHtml = (
         margin: 0;
         padding: 0;
         width: 100%;
-        min-height: 100%;
+        
         background: ${isDark ? "#1E293B" : "#FFFFFF"};
         color: ${isDark ? "#F8FAFC" : "#111111"};
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
@@ -192,17 +196,6 @@ const generateHtml = (
       body {
         padding: 8px;
         box-sizing: border-box;
-      }
-
-      .embed-container {
-        width: 100%;
-        max-width: 100%;
-        min-height: 100%;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: flex-start;
-        overflow: hidden;
       }
 
       blockquote,
@@ -215,13 +208,23 @@ const generateHtml = (
         box-sizing: border-box !important;
         border-radius: 8px;
       }
+      ${embedSizingCss(sizing)}
     </style>
   </head>
 
   <body>
-    <div class="embed-container">
+    <script>
+      window.addEventListener('error', function(event) {
+        var node=event.target;
+        if (node && node.tagName === 'SCRIPT' && /^https:\\/\\/cdorgapi\\.b-cdn\\.net\\/widgets\\/(?:score|v?matchlist)\\.js$/.test(node.src || '')) {
+          if(window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify({type:'embed-script-error',key:${JSON.stringify(messageKey).replace(/</g, "\\u003c")}}));
+        }
+      }, true);
+    </script>
+    <div id="embed-fit"><div id="embed-content">
       ${embedCode}
-    </div>
+    </div></div>
+    ${embedSizingScript(sizing, messageKey)}
 
     <script>
       document.addEventListener("click", function () {
@@ -266,7 +269,9 @@ const generateHtml = (
 </html>`;
 
 export default function EmbedCard({ item }: EmbedCardProps) {
-  const contentHeight = Math.max(80, Number(item.height) || 250);
+  const sizing = useMemo(() => getEmbedSizing(item.embedCode, item.height, item.width, item.autoSize === true), [item.embedCode, item.height, item.width, item.autoSize]);
+  const [measurement, setMeasurement] = useState<{ key: string; height: number } | null>(null);
+  const [loading, setLoading] = useState(true);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const trackEmbedInteraction = useAppStore(state => state.trackEmbedInteraction);
@@ -274,6 +279,8 @@ export default function EmbedCard({ item }: EmbedCardProps) {
   const lastExternal = useRef(0);
   const [failed, setFailed] = useState(false);
   const [retry, setRetry] = useState(0);
+  const sizingKey = JSON.stringify([item._id, item.embedCode, item.height, item.width, item.autoSize, retry, isDark]);
+  const contentHeight = sizing.autoSize && measurement?.key === sizingKey ? measurement.height : sizing.fallbackHeight;
   const trackClick = useCallback(() => {
     const now = Date.now();
     if (now - lastClick.current < 900) return;
@@ -291,7 +298,7 @@ export default function EmbedCard({ item }: EmbedCardProps) {
          height="100%"
          style="border:none;border-radius:8px;min-height:${Math.max(
            60,
-           contentHeight - 16,
+           sizing.fallbackHeight - 16,
          )}px;"
          allowfullscreen
          allow="autoplay; encrypted-media; picture-in-picture"
@@ -309,9 +316,9 @@ const shareUrl = useMemo(
   () => externalContentUrl(item.shareUrl || "") || contentUrl,
   [item.shareUrl, contentUrl],
 );
-  const html = useMemo(() => generateHtml(processedEmbedCode, isDark), [processedEmbedCode, isDark]);
+  const html = useMemo(() => generateHtml(processedEmbedCode, isDark, sizing, sizingKey), [processedEmbedCode, isDark, sizing, sizingKey]);
   const source = useMemo(() => ({ html, baseUrl: "https://inminut.com/" }), [html]);
-  useEffect(() => { setFailed(false); lastClick.current = 0; lastExternal.current = 0; }, [item._id, item.embedCode]);
+  useEffect(() => { setFailed(false); setLoading(true); lastClick.current = 0; lastExternal.current = 0; }, [item._id, item.embedCode, item.height, item.width, item.autoSize]);
 
   const openExternal = useCallback(async (url: string, fallback?: string) => {
     if (Date.now() - lastExternal.current < 900) return;
@@ -333,14 +340,14 @@ const shareUrl = useMemo(
     if (instagram) {
       void openExternal(`https://www.instagram.com/${instagram[1]}/${instagram[2]}/`);
     } else if (/^spotify:(?:\/\/open(?:[/?#]|$)|(?:track|episode|album|playlist|show|artist):[a-zA-Z0-9]+$)/i.test(url)) {
-      const fallback = /^https:\/\/open\.spotify\.com\//i.test(shareUrl) ? shareUrl : "https://open.spotify.com/";
+      const fallback = /^https:\/\/open\.spotify\.com\//i.test(contentUrl) ? contentUrl : "https://open.spotify.com/";
       void openExternal(url, fallback);
     } else if (/^(?:instagram|youtube|vnd\.youtube|whatsapp):/i.test(url)) {
       // Use the original HTTPS content instead of executing arbitrary native intent payloads.
-      if (shareUrl) void openExternal(shareUrl);
+      if (contentUrl) void openExternal(contentUrl);
     }
     return false;
-  }, [openExternal, shareUrl]);
+  }, [openExternal, contentUrl]);
 
   useEffect(() => {
     trackEmbedInteraction(item._id, "view");
@@ -349,6 +356,12 @@ const shareUrl = useMemo(
   useEffect(() => {
     if (Platform.OS !== "web") return;
 
+    const handleSize = (event: MessageEvent) => {
+      if (event.source !== containerRef.current?.querySelector("iframe")?.contentWindow) return;
+      const data = event.data;
+      if (sizing.autoSize && data?.type === "embed-size" && data.key === sizingKey && typeof data.height === "number" && Number.isFinite(data.height)) setMeasurement({ key: sizingKey, height: Math.max(80, Math.min(4000, Math.round(data.height))) });
+    };
+    window.addEventListener("message", handleSize);
     const handleBlur = () => {
       setTimeout(() => {
         const activeElement = document.activeElement;
@@ -367,8 +380,9 @@ const shareUrl = useMemo(
 
     return () => {
       window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("message", handleSize);
     };
-  }, [trackClick]);
+  }, [trackClick, sizing.autoSize, sizingKey]);
 
   const handleShare = async () => {
     const cleanTitle = String(item.title || "Shared from INMinut").trim();
@@ -432,6 +446,14 @@ const shareUrl = useMemo(
       </View>
 
       <TouchableOpacity
+        onPress={() => { setFailed(false); setLoading(true); setRetry(n => n + 1); }}
+        style={[styles.shareButton, isDark && styles.shareButtonDark]}
+        accessibilityRole="button"
+        accessibilityLabel="Reload embedded content"
+      >
+        <Ionicons name="refresh-outline" size={18} color={isDark ? "#F8FAFC" : "#111827"} />
+      </TouchableOpacity>
+      <TouchableOpacity
         onPress={handleShare}
         style={[
           styles.shareButton,
@@ -461,7 +483,7 @@ const shareUrl = useMemo(
         {header}
 
         <div ref={containerRef} style={{ height: contentHeight }}>
-          <iframe title={item.title} srcDoc={html}
+          <iframe key={sizingKey} title={item.title} srcDoc={html}
             sandbox="allow-scripts allow-presentation allow-popups allow-popups-to-escape-sandbox"
             allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
             allowFullScreen style={{ width: "100%", height: "100%", border: 0 }} />
@@ -478,20 +500,22 @@ const shareUrl = useMemo(
       ]}
     >
       {header}
-      {!!shareUrl && <TouchableOpacity accessibilityRole="button" onPress={() => void openExternal(shareUrl)} style={{ alignSelf: "flex-end", paddingHorizontal: 14, paddingVertical: 7 }}><Text style={{ color: isDark ? "#FB923C" : "#C2410C", fontSize: 12 }}>Open externally ↗</Text></TouchableOpacity>}
-      <View style={{ height: contentHeight }}>
+      {!!contentUrl && <TouchableOpacity accessibilityRole="button" onPress={() => void openExternal(contentUrl)} style={{ alignSelf: "flex-end", paddingHorizontal: 14, paddingVertical: 7 }}><Text style={{ color: isDark ? "#FB923C" : "#C2410C", fontSize: 12 }}>Open externally ↗</Text></TouchableOpacity>}
+      <View style={{ height: failed ? Math.min(contentHeight, 150) : contentHeight }}>
         {failed ? (
           <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 12, gap: 12 }}>
             <Text style={{ color: isDark ? "#F8FAFC" : "#111827" }}>Unable to load embedded content.</Text>
-            <TouchableOpacity onPress={() => { setFailed(false); setRetry(n => n + 1); }}><Text style={{ color: "#F97316" }}>Retry</Text></TouchableOpacity>
-            {!!shareUrl && <TouchableOpacity onPress={() => void openExternal(shareUrl)}><Text style={{ color: "#F97316" }}>Open in browser</Text></TouchableOpacity>}
+            <TouchableOpacity onPress={() => { setFailed(false); setLoading(true); setRetry(n => n + 1); }}><Text style={{ color: "#F97316" }}>Retry</Text></TouchableOpacity>
+            {!!contentUrl && <TouchableOpacity onPress={() => void openExternal(contentUrl)}><Text style={{ color: "#F97316" }}>Open in browser</Text></TouchableOpacity>}
           </View>
         ) : <WebView
           key={`${item._id}-${retry}`}
           originWhitelist={["*"]}
           source={source}
           onShouldStartLoadWithRequest={handleNavigation}
-          onError={() => setFailed(true)}
+          onLoadStart={() => setLoading(true)}
+          onLoadEnd={() => setLoading(false)}
+          onError={() => { setFailed(true); setLoading(false); }}
           allowsInlineMediaPlayback
           allowFileAccess={false}
           allowFileAccessFromFileURLs={false}
@@ -500,7 +524,7 @@ const shareUrl = useMemo(
           javaScriptEnabled
           domStorageEnabled
           scrollEnabled
-          scalesPageToFit
+          scalesPageToFit={false}
           allowsFullscreenVideo
           showsVerticalScrollIndicator={false}
           showsHorizontalScrollIndicator={false}
@@ -512,7 +536,13 @@ const shareUrl = useMemo(
             try {
               const data = JSON.parse(event.nativeEvent.data);
 
-              if (data?.type === "click") {
+              if (data?.type === "embed-size" && sizing.autoSize && data.key === sizingKey && typeof data.height === "number" && Number.isFinite(data.height)) {
+                const height = Math.max(80, Math.min(4000, Math.round(data.height)));
+                setMeasurement(prev => prev?.key === sizingKey && Math.abs(prev.height - height) < 2 ? prev : { key: sizingKey, height });
+              } else if (data?.type === "embed-script-error" && data.key === sizingKey) {
+                setFailed(true);
+                setLoading(false);
+              } else if (data?.type === "click") {
                 trackClick();
               }
             } catch (error) {
@@ -523,6 +553,7 @@ const shareUrl = useMemo(
             }
           }}
         />}
+        {loading && !failed && <View pointerEvents="none" style={{ position: "absolute", top: 10, right: 12 }}><ActivityIndicator size="small" color="#F97316" /></View>}
       </View>
     </View>
   );

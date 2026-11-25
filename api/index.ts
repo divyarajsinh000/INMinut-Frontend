@@ -74,6 +74,8 @@ export interface EmbedItem {
   embedCode: string;
   shareUrl?: string; 
   height: number;
+    width?: number | null;
+  autoSize?: boolean;
   positionAfterNews: number;
   isEnabled: boolean;
   categories?: any[];

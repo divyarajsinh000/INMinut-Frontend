@@ -129,7 +129,20 @@ export default function NewsCard({
   };
   const isSaved = savedNews.includes(item._id);
   const isLiked = likedNews.includes(item._id);
-  const images = getImageMedia(item.media || []);
+const allCategories = useAppStore((s) => s.categories);
+
+const [failedImages, setFailedImages] = useState<string[]>([]);
+const [loadedImages, setLoadedImages] = useState<string[]>([]);
+const [imageRetryKey, setImageRetryKey] = useState(0);
+
+const originalImages = getImageMedia(item.media || []);
+
+const images = originalImages.filter(
+  (image) => !failedImages.includes(getMediaUrl(image.url)),
+);
+
+const allImagesFailed =
+  originalImages.length > 0 && images.length === 0;
   const nonImageMedia = (item.media || []).filter(
     (m) => !!m.url && m.type !== "image",
   );
@@ -153,12 +166,22 @@ export default function NewsCard({
   const [renderedLines, setRenderedLines] = useState<any[]>([]);
   const blinkAnim = useRef(new Animated.Value(1)).current;
 
-  useEffect(() => {
-    setRenderedLines([]);
-    setDescriptionExpanded(false);
-    setActiveImageIndex(0);
-    setImageRatios({});
-  }, [item._id]);
+useEffect(() => {
+  setRenderedLines([]);
+  setDescriptionExpanded(false);
+  setActiveImageIndex(0);
+  setImageRatios({});
+  setFailedImages([]);
+  setLoadedImages([]);
+  setImageRetryKey(0);
+  setPreviewVisible(false);
+  setPreviewIndex(0);
+
+  imageScrollRef.current?.scrollTo({
+    x: 0,
+    animated: false,
+  });
+}, [item._id]);
 
   useEffect(() => {
     if (item.isBreaking && item.isBreakingBlink) {
@@ -308,6 +331,41 @@ export default function NewsCard({
     images.length > 0
       ? getImageHeight(images[Math.min(activeImageIndex, images.length - 1)])
       : 0;
+const handleImageError = (
+  media: MediaItem,
+  error: unknown,
+) => {
+  const imageUrl = getMediaUrl(media.url);
+
+  if (__DEV__) {
+    console.warn("News image failed:", {
+      newsId: item._id,
+      imageUrl,
+      error,
+    });
+  }
+
+  setFailedImages((prev) =>
+    prev.includes(imageUrl)
+      ? prev
+      : [...prev, imageUrl],
+  );
+
+  setLoadedImages((prev) =>
+    prev.filter((url) => url !== imageUrl),
+  );
+
+  setActiveImageIndex(0);
+  setPreviewVisible(false);
+  setPreviewIndex(0);
+};
+
+const retryNewsImages = () => {
+  setFailedImages([]);
+  setLoadedImages([]);
+  setActiveImageIndex(0);
+  setImageRetryKey((prev) => prev + 1);
+};
 
   const handleImageLoad = (media: MediaItem, event: any) => {
     const width =
@@ -539,7 +597,46 @@ export default function NewsCard({
     setPreviewIndex(index);
     setPreviewVisible(true);
   };
+const rawCategories = item.categories?.length
+  ? item.categories
+  : item.category
+    ? [item.category]
+    : [];
 
+const displayCategories = rawCategories
+  .map((category) => {
+    if (!category) return null;
+
+    const categoryId =
+      typeof category === "string"
+        ? category
+        : category._id;
+
+    const storeCategory = allCategories.find(
+      (cat) => cat._id === categoryId,
+    );
+
+    const resolvedCategory =
+      typeof category === "string"
+        ? storeCategory
+        : {
+            ...storeCategory,
+            ...category,
+            name:
+              category.name?.trim() ||
+              storeCategory?.name,
+          };
+
+    if (!resolvedCategory?.name?.trim()) {
+      return null;
+    }
+
+    return resolvedCategory;
+  })
+  .filter(
+    (category): category is NonNullable<typeof category> =>
+      category !== null,
+  );
   return (
     <View
       onLayout={(event) => {
@@ -566,8 +663,14 @@ export default function NewsCard({
           style={[styles.imageWrap, { height: activeImageHeight }]}
         >
           <ScrollView
-            ref={imageScrollRef}
-            horizontal
+             key={JSON.stringify([
+    item._id,
+    imageRetryKey,
+    images.map((image) => image.url),
+  ])}
+  ref={imageScrollRef}
+  horizontal
+           
             bounces={false}
             overScrollMode="never"
             nestedScrollEnabled
@@ -606,15 +709,54 @@ export default function NewsCard({
                 ]}
               >
                 <Image
-                  source={{ uri: getMediaUrl(media.url) }}
-                  style={[styles.image, { width: mediaWidth, height: activeImageHeight }]}
-                  contentFit="cover"
-                  contentPosition="center"
-                  transition={0}
-                  cachePolicy="memory-disk"
-                  recyclingKey={`${item._id}-${media.url}-${index}`}
-                  onLoad={(event) => handleImageLoad(media, event)}
-                />
+  source={{ uri: getMediaUrl(media.url) }}
+  style={[
+    styles.image,
+    {
+      width: mediaWidth,
+      height: activeImageHeight,
+    },
+  ]}
+  contentFit="cover"
+  contentPosition="center"
+  transition={150}
+  cachePolicy="memory-disk"
+  recyclingKey={`${item._id}-${media.url}-${imageRetryKey}`}
+onLoad={(event) => {
+  handleImageLoad(media, event);
+}}
+onDisplay={() => {
+  const url = getMediaUrl(media.url);
+
+  setLoadedImages((prev) =>
+    prev.includes(url)
+      ? prev
+      : [...prev, url],
+  );
+}}
+onError={(event) => {
+  handleImageError(media, event.error);
+}}
+/>
+
+{!loadedImages.includes(getMediaUrl(media.url)) && (
+  <View
+    pointerEvents="none"
+    style={[
+      styles.imageLoadingOverlay,
+      {
+        backgroundColor: isDark
+          ? "#1E293B"
+          : "#F8FAFC",
+      },
+    ]}
+  >
+    <ActivityIndicator
+      size="small"
+      color={AppPalette.brightOrange}
+    />
+  </View>
+)}
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -664,39 +806,107 @@ export default function NewsCard({
         </View>
       ) : null}
 
+{allImagesFailed && (
+  <TouchableOpacity
+    onPress={retryNewsImages}
+    activeOpacity={0.8}
+    accessibilityRole="button"
+    accessibilityLabel="Retry loading news images"
+    style={[
+      styles.imageRetryBar,
+      {
+        backgroundColor: isDark
+          ? "#1E293B"
+          : "#F8FAFC",
+        borderBottomColor: isDark
+          ? "#334155"
+          : "#E2E8F0",
+      },
+    ]}
+  >
+    <Ionicons
+      name="image-outline"
+      size={16}
+      color={isDark ? "#94A3B8" : "#64748B"}
+    />
 
+    <Text
+      style={[
+        styles.imageRetryText,
+        {
+          color: isDark ? "#94A3B8" : "#64748B",
+        },
+      ]}
+    >
+      Image unavailable
+    </Text>
+
+    <View style={styles.imageRetryAction}>
+      <Ionicons
+        name="refresh-outline"
+        size={15}
+        color={AppPalette.brightOrange}
+      />
+
+      <Text
+        style={{
+          fontSize: 12,
+          fontWeight: "700",
+          color: AppPalette.brightOrange,
+        }}
+      >
+        Retry
+      </Text>
+    </View>
+  </TouchableOpacity>
+)}
       <View style={styles.content}>
         <Pressable onPress={onOpen} disabled={!onOpen} style={styles.metaHeader}>
           <View style={styles.categoryCityWrap}>
-            {((item.categories && item.categories.length > 0)
-              ? item.categories
-              : (item.category ? [item.category] : [])
-            ).map((cat, idx) => (
-              <View
-                key={cat._id || `cat-${idx}`}
-                style={[
-                  styles.categoryBadge,
-                  {
-                    backgroundColor:
-                      cat.backgroundColor || Colors.brightOrange,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.categoryText,
-                    { color: cat.textColor || Colors.white },
-                  ]}
-                >
-                  {cat.name}
-                </Text>
-              </View>
-            ))}
-            {(!item.categories || item.categories.length === 0) && !item.category && (
-              <View style={[styles.categoryBadge, { backgroundColor: Colors.brightOrange }]}>
-                <Text style={[styles.categoryText, { color: Colors.white }]}>News</Text>
-              </View>
-            )}
+          {displayCategories.map((cat, idx) => (
+  <View
+    key={cat._id || `cat-${idx}`}
+    style={[
+      styles.categoryBadge,
+      {
+        backgroundColor:
+          cat.backgroundColor || Colors.brightOrange,
+      },
+    ]}
+  >
+    <Text
+      style={[
+        styles.categoryText,
+        {
+          color: cat.textColor || Colors.white,
+        },
+      ]}
+    >
+      {cat.name}
+    </Text>
+  </View>
+))}
+
+{displayCategories.length === 0 && (
+  <View
+    style={[
+      styles.categoryBadge,
+      {
+        backgroundColor: Colors.brightOrange,
+      },
+    ]}
+  >
+    <Text
+      style={[
+        styles.categoryText,
+        { color: Colors.white },
+      ]}
+    >
+      News
+    </Text>
+  </View>
+)}
+           
 
             {!!item.cities?.length && (
               <View style={styles.cityChipsWrap}>
@@ -716,14 +926,17 @@ export default function NewsCard({
                       size={11}
                       color={AppPalette.brightOrange}
                     />
-                    <Text
-                      style={[
-                        styles.cityChipText,
-                        isDark && { color: "#CBD5E1" },
-                      ]}
-                    >
-                      {city.name}
-                    </Text>
+                  <Text
+  numberOfLines={1}
+  ellipsizeMode="tail"
+  maxFontSizeMultiplier={1.3}
+  style={[
+    styles.cityChipText,
+    isDark && { color: "#CBD5E1" },
+  ]}
+>
+  {city.name}
+</Text>
                   </View>
                 ))}
               </View>
@@ -1207,64 +1420,107 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   content: { padding: 16 },
-  metaHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    marginBottom: 10,
-    gap: 8,
-  },
-  categoryCityWrap: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: 7,
-    paddingRight: 4,
-  },
-  categoryBadge: {
-    flexShrink: 0,
-    paddingHorizontal: 11,
-    paddingVertical: 5,
-    borderRadius: 999,
-  },
-  categoryText: { fontSize: 8, fontWeight: "900", textTransform: "uppercase" },
-  cityChipsWrap: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: 6,
-  },
-  cityChip: {
-    maxWidth: "100%",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-    backgroundColor: AppPalette.blueSurface,
-    borderWidth: 1,
-    borderColor: "#DBEAFE",
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  cityChipText: {
-    flexShrink: 1,
-    color: AppPalette.deepBlue,
-    fontSize: 8,
-    lineHeight: 12,
-    fontWeight: "800",
-  },
-  dateRow: {
-    flexShrink: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingTop: 4,
-  },
-  date: { fontSize: 11, color: AppPalette.muted, fontWeight: "700" },
+metaHeader: {
+  flexDirection: "row",
+  flexWrap: "wrap",
+  alignItems: "center",
+  justifyContent: "space-between",
+  marginBottom: 10,
+  gap: 8,
+},
+
+  imageLoadingOverlay: {
+  ...StyleSheet.absoluteFillObject,
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+imageRetryBar: {
+  flexDirection: "row",
+  alignItems: "center",
+  paddingHorizontal: 16,
+  paddingVertical: 10,
+  gap: 7,
+  borderBottomWidth: StyleSheet.hairlineWidth,
+},
+
+imageRetryText: {
+  flex: 1,
+  fontSize: 12,
+  fontWeight: "600",
+},
+
+imageRetryAction: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 4,
+},
+categoryCityWrap: {
+  flexGrow: 1,
+  flexShrink: 1,
+  flexBasis: "auto",
+  flexDirection: "row",
+  alignItems: "center",
+  flexWrap: "wrap",
+  gap: 6,
+},
+
+categoryBadge: {
+  flexShrink: 0,
+  paddingHorizontal: 9,
+  paddingVertical: 5,
+  borderRadius: 999,
+},
+
+categoryText: {
+  fontSize: 10,
+  fontWeight: "900",
+  textTransform: "uppercase",
+},
+ cityChipsWrap: {
+  flexGrow: 0,
+  flexShrink: 0,
+  maxWidth: "100%",
+  flexDirection: "row",
+  flexWrap: "wrap",
+  alignItems: "center",
+  gap: 5,
+},
+
+cityChip: {
+  flexShrink: 0,
+  maxWidth: "100%",
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 3,
+  backgroundColor: AppPalette.blueSurface,
+  borderWidth: 1,
+  borderColor: "#DBEAFE",
+  borderRadius: 999,
+  paddingHorizontal: 7,
+  paddingVertical: 4,
+},
+
+cityChipText: {
+  flexShrink: 1,
+  color: AppPalette.deepBlue,
+  fontSize: 10,
+  fontWeight: "800",
+},
+
+dateRow: {
+  flexShrink: 0,
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 4,
+  marginLeft: "auto",
+},
+
+date: {
+  fontSize: 11,
+  color: AppPalette.muted,
+  fontWeight: "700",
+},
   titleRow: {
     flexDirection: "row",
     alignItems: "flex-start",

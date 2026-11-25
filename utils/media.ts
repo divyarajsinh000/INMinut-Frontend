@@ -34,16 +34,43 @@ export const normalizeMediaName = (value?: string) => {
 };
 
 export const getMediaUrl = (url?: string) => {
-  if (!url) return '';
-  return url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
+  if (typeof url !== 'string') return '';
+
+  const value = url.trim();
+
+  if (!value) return '';
+
+  // Complete remote URL
+  if (/^https?:\/\//i.test(value)) {
+    return value;
+  }
+
+  // Protocol-relative URL
+  if (value.startsWith('//')) {
+    return `https:${value}`;
+  }
+
+  // Local media URI
+  if (/^(file:|content:|data:|blob:)/i.test(value)) {
+    return value;
+  }
+
+  // Relative backend media URL
+  const baseUrl = API_BASE_URL.replace(/\/+$/, '');
+
+  return `${baseUrl}/${value.replace(/^\/+/, '')}`;
 };
 
 export const getMediaName = (item?: MediaItem) =>
   normalizeMediaName(item?.originalName) || `${item?.type || 'media'} file`;
 
 export const getImageMedia = (media?: MediaItem[]) =>
-  (media || []).filter((item) => item?.type === 'image' && !!item?.url);
-
+  (Array.isArray(media) ? media : []).filter(
+    (item) =>
+      item?.type === 'image' &&
+      typeof item.url === 'string' &&
+      item.url.trim().length > 0,
+  );
 // Animated GIFs are not reliably rendered by native view capture libraries.
 // Keep them as their original file when sharing instead of turning them into a JPG.
 export const isGifMedia = (item?: MediaItem) => {
