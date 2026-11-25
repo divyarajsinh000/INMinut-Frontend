@@ -62,10 +62,17 @@ export interface Ad {
   clickCount?: number;
 }
 
+export interface EmbedQuery {
+  enabledOnly?: boolean;
+  search?: string;
+  category?: string;
+}
+
 export interface EmbedItem {
   _id: string;
   title: string;
   embedCode: string;
+  shareUrl?: string; 
   height: number;
   positionAfterNews: number;
   isEnabled: boolean;
@@ -141,11 +148,12 @@ export const api = {
     return response.data.data as Ad[];
   },
 
-  getEmbeds: async (params?: { enabledOnly?: boolean; search?: string }) => {
+  getEmbeds: async (params?: EmbedQuery) => {
     const response = await apiClient.get('/api/embeds', {
       params: {
         enabledOnly: params?.enabledOnly ?? true,
         search: params?.search,
+        category: params?.category,
       },
     });
     return response.data.data as EmbedItem[];

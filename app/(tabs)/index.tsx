@@ -1,36 +1,64 @@
-import { View, FlatList, StyleSheet, RefreshControl, Text, Pressable, Image, ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Image as ExpoImage } from 'expo-image';
-import { router, useLocalSearchParams } from 'expo-router';
-import { useIsFocused } from '@react-navigation/native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import {
+  AccessibilityInfo,
+  Animated,
+  View,
+  FlatList,
+  StyleSheet,
+  RefreshControl,
+  Text,
+  Pressable,
+  Image,
+  ScrollView,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Image as ExpoImage } from "expo-image";
+import { router, useLocalSearchParams } from "expo-router";
+import { useIsFocused } from "@react-navigation/native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
-import NewsCard from '@/components/NewsCard';
-import AdCard from '@/components/AdCard';
-import EmbedCard from '@/components/EmbedCard';
-import NewsFilterSheet, { type NewsDateFilter } from '@/components/NewsFilterSheet';
-import CityPreferenceModal from '@/components/CityPreferenceModal';
-import OnboardingSlider, { hasCompletedOnboarding } from '@/components/OnboardingSlider';
-import AppGuideOverlay, { hasCompletedAppGuide } from '@/components/AppGuideOverlay';
-import { useAppStore } from '@/store';
-import { Ad, NewsItem, EmbedItem, api } from '@/api';
-import { AppPalette } from '@/constants/theme';
-import { Ionicons } from '@expo/vector-icons';
-import * as SecureStore from '@/utils/storage';
-import { getMediaUrl } from '@/utils/media';
+import NewsCard from "@/components/NewsCard";
+import AdCard from "@/components/AdCard";
+import EmbedCard from "@/components/EmbedCard";
+import NewsFilterSheet, {
+  type NewsDateFilter,
+} from "@/components/NewsFilterSheet";
+import CityPreferenceModal from "@/components/CityPreferenceModal";
+import OnboardingSlider, {
+  hasCompletedOnboarding,
+} from "@/components/OnboardingSlider";
+import AppGuideOverlay, {
+  hasCompletedAppGuide,
+} from "@/components/AppGuideOverlay";
+import { useAppStore } from "@/store";
+import { Ad, NewsItem, EmbedItem, Category, api } from "@/api";
+import { AppPalette } from "@/constants/theme";
+import { Ionicons } from "@expo/vector-icons";
+import * as SecureStore from "@/utils/storage";
+import { getMediaUrl } from "@/utils/media";
 
-const CITY_PREFERENCE_SETUP_KEY = 'city_preference_setup_done';
+const CITY_PREFERENCE_SETUP_KEY = "city_preference_setup_done";
+
+type CategoryTab = Omit<Category, "_id"> & { _id: string | null };
+const ALL_NEWS_TAB: CategoryTab = { _id: null, name: "All News" };
+const validCategoryColor = (value: string | undefined, fallback: string) =>
+  typeof value === "string" &&
+  /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(value.trim())
+    ? value.trim()
+    : fallback;
 
 type FeedItem =
-  | { type: 'news'; data: NewsItem }
-  | { type: 'ad'; data: Ad; key: string }
-  | { type: 'embed'; data: EmbedItem; key: string }
-  | { type: 'section'; title: string; key: string };
+  | { type: "news"; data: NewsItem }
+  | { type: "ad"; data: Ad; key: string }
+  | { type: "embed"; data: EmbedItem; key: string }
+  | { type: "section"; title: string; key: string };
 
 const hasRenderableNews = (item: NewsItem) => {
   if (item.isActive === false) return false;
-  const hasText = !!item.title?.trim() || !!item.description?.trim() || !!item.content?.trim();
+  const hasText =
+    !!item.title?.trim() ||
+    !!item.description?.trim() ||
+    !!item.content?.trim();
   const hasMedia = (item.media || []).some((media) => !!media?.url);
   return hasText || hasMedia;
 };
@@ -75,18 +103,18 @@ export default function HomeScreen() {
     settings,
   } = useAppStore();
 
-  const isDark = theme === 'dark';
+  const isDark = theme === "dark";
   const themeStyles = {
-    bg: isDark ? '#111111' : '#FFF5F5',
-    card: isDark ? '#1E293B' : '#FFFFFF',
-    text: isDark ? '#F8FAFC' : '#111111',
-    border: isDark ? '#334155' : '#FECACA',
-    textSecondary: isDark ? '#94A3B8' : '#475569',
+    bg: isDark ? "#111111" : "#FFF5F5",
+    card: isDark ? "#1E293B" : "#FFFFFF",
+    text: isDark ? "#F8FAFC" : "#111111",
+    border: isDark ? "#334155" : "#FECACA",
+    textSecondary: isDark ? "#94A3B8" : "#475569",
   };
 
   const [showFilters, setShowFilters] = useState(false);
   const [stateId, setStateId] = useState<string | null>(null);
-  const [dateFilter, setDateFilter] = useState<NewsDateFilter>({ mode: 'all' });
+  const [dateFilter, setDateFilter] = useState<NewsDateFilter>({ mode: "all" });
   useEffect(() => {
     if (!params.openFilters) return;
     setShowFilters(true);
@@ -94,34 +122,119 @@ export default function HomeScreen() {
   }, [params.openFilters]);
   const [showCityModal, setShowCityModal] = useState(false);
   // Temporary feed filter; saved city preferences remain unchanged.
-  const [selectedFeedCityId, setSelectedFeedCityId] = useState<string | null>(null);
+  const [selectedFeedCityId, setSelectedFeedCityId] = useState<string | null>(
+    null,
+  );
   const isFocused = useIsFocused();
   const [fetchVersion, setFetchVersion] = useState(0);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showAppGuide, setShowAppGuide] = useState(false);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const [isRefreshingAll, setIsRefreshingAll] = useState(false);
-  const [notificationNews, setNotificationNews] = useState<NewsItem | null>(null);
-  const [isLoadingNotificationNews, setIsLoadingNotificationNews] = useState(false);
-  const [notificationNewsError, setNotificationNewsError] = useState<string | null>(null);
+  const [notificationNews, setNotificationNews] = useState<NewsItem | null>(
+    null,
+  );
+  const [isLoadingNotificationNews, setIsLoadingNotificationNews] =
+    useState(false);
+  const [notificationNewsError, setNotificationNewsError] = useState<
+    string | null
+  >(null);
   const [openedNewsId, setOpenedNewsId] = useState<string | null>(null);
   const [openedNewsSource, setOpenedNewsSource] = useState<
-    'share' | 'notification' | null
+    "share" | "notification" | null
   >(null);
   const newsListRef = useRef<FlatList<FeedItem>>(null);
+  const categoryScrollRef = useRef<ScrollView>(null);
+  const categoryLayouts = useRef<Record<string, { x: number; width: number }>>(
+    {},
+  );
+  const categoryViewport = useRef(0);
+  const visibleCategories = categories.filter(
+    (category) => category.isVisible !== false,
+  );
+  const categoryTabs: CategoryTab[] = [ALL_NEWS_TAB, ...visibleCategories];
+  const hasHighlightedCategories = visibleCategories.some(
+    (category) => category.isHighlighted === true,
+  );
+  const categoryPulse = useRef(new Animated.Value(1)).current;
+  const [reduceMotion, setReduceMotion] = useState(true);
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((value) => {
+        if (mounted) setReduceMotion(value);
+      })
+      .catch(() => undefined);
+    const subscription = AccessibilityInfo.addEventListener(
+      "reduceMotionChanged",
+      setReduceMotion,
+    );
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
+  useEffect(() => {
+    categoryPulse.setValue(1);
+    if (!isFocused || reduceMotion || !hasHighlightedCategories) return;
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(categoryPulse, {
+          toValue: 0.55,
+          duration: 850,
+          useNativeDriver: true,
+          isInteraction: false,
+        }),
+        Animated.timing(categoryPulse, {
+          toValue: 1,
+          duration: 850,
+          useNativeDriver: true,
+          isInteraction: false,
+        }),
+      ]),
+    );
+    animation.start();
+    return () => {
+      animation.stop();
+      categoryPulse.setValue(1);
+    };
+  }, [categoryPulse, hasHighlightedCategories, isFocused, reduceMotion]);
+
+  const selectedCategoryRef = useRef(selectedCategory);
+  selectedCategoryRef.current = selectedCategory;
+  const centerCategory = useCallback((id: string | null) => {
+    const layout = categoryLayouts.current[id || "__all__"];
+    if (!layout || !categoryViewport.current) return;
+    categoryScrollRef.current?.scrollTo({
+      x: Math.max(
+        0,
+        layout.x + layout.width / 2 - categoryViewport.current / 2,
+      ),
+      animated: true,
+    });
+  }, []);
+  useEffect(() => {
+    centerCategory(selectedCategory);
+  }, [selectedCategory, centerCategory]);
   const refreshInProgressRef = useRef(false);
 
   const viewedNewsIdsRef = useRef<Set<string>>(new Set());
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
-  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: Array<{ item: FeedItem; isViewable: boolean }> }) => {
-    viewableItems.forEach(({ item, isViewable }) => {
-      if (!isViewable || item.type !== 'news') return;
-      const newsId = item.data._id;
-      if (viewedNewsIdsRef.current.has(newsId)) return;
-      viewedNewsIdsRef.current.add(newsId);
-      trackNewsView(newsId);
-    });
-  }).current;
+  const onViewableItemsChanged = useRef(
+    ({
+      viewableItems,
+    }: {
+      viewableItems: Array<{ item: FeedItem; isViewable: boolean }>;
+    }) => {
+      viewableItems.forEach(({ item, isViewable }) => {
+        if (!isViewable || item.type !== "news") return;
+        const newsId = item.data._id;
+        if (viewedNewsIdsRef.current.has(newsId)) return;
+        viewedNewsIdsRef.current.add(newsId);
+        trackNewsView(newsId);
+      });
+    },
+  ).current;
 
   const loadData = useCallback(async () => {
     if (refreshInProgressRef.current) return;
@@ -130,16 +243,16 @@ export default function HomeScreen() {
     setIsRefreshingAll(true);
 
     try {
-      const [, onboardingDone, cityPreferenceSetupDone, appGuideDone] = await Promise.all([
-        loadCityPreferences(),
-        hasCompletedOnboarding(),
-        SecureStore.getItemAsync(CITY_PREFERENCE_SETUP_KEY),
-        hasCompletedAppGuide(),
-      ]);
+      const [, onboardingDone, cityPreferenceSetupDone, appGuideDone] =
+        await Promise.all([
+          loadCityPreferences(),
+          hasCompletedOnboarding(),
+          SecureStore.getItemAsync(CITY_PREFERENCE_SETUP_KEY),
+          hasCompletedAppGuide(),
+        ]);
 
       await Promise.all([
         fetchCategories(),
-        fetchEmbeds(),
         fetchCities(),
         fetchSettings(),
         loadSavedNews(),
@@ -154,7 +267,7 @@ export default function HomeScreen() {
         setShowAppGuide(true);
       }
 
-      setFetchVersion(v => v + 1);
+      setFetchVersion((v) => v + 1);
       viewedNewsIdsRef.current.clear();
       setPreferencesLoaded(true);
     } finally {
@@ -164,14 +277,11 @@ export default function HomeScreen() {
   }, [
     fetchCategories,
     fetchCities,
-    fetchEmbeds,
     fetchSettings,
     loadCityPreferences,
     loadLikedNews,
     loadSavedNews,
   ]);
-
-  
 
   const handleLogoPress = useCallback(() => {
     newsListRef.current?.scrollToOffset({
@@ -194,42 +304,69 @@ export default function HomeScreen() {
     });
   }, []);
 
-  const changeCategoryBySwipe = useCallback((direction: 'next' | 'previous') => {
-    // Include the unfiltered feed so users can swipe back to it from the first category.
-    const categoryIds = [null, ...categories.map((category) => category._id)];
-    const currentIndex = categoryIds.indexOf(selectedCategory);
-    const nextIndex = currentIndex + (direction === 'next' ? 1 : -1);
+  const changeCategoryBySwipe = useCallback(
+    (direction: "next" | "previous") => {
+      // Include the unfiltered feed so users can swipe back to it from the first category.
+      const categoryIds = [
+        null,
+        ...categories
+          .filter((category) => category.isVisible !== false)
+          .map((category) => category._id),
+      ];
+      const currentIndex = categoryIds.indexOf(selectedCategory);
+      const nextIndex = currentIndex + (direction === "next" ? 1 : -1);
 
-    if (nextIndex < 0 || nextIndex >= categoryIds.length) return;
+      if (nextIndex < 0 || nextIndex >= categoryIds.length) return;
 
-    setSelectedCategory(categoryIds[nextIndex]);
-    if (openedNewsId) {
-      closeNotificationNews();
-    }
-    newsListRef.current?.scrollToOffset({ offset: 0, animated: true });
-  }, [categories, selectedCategory, setSelectedCategory, openedNewsId, closeNotificationNews]);
+      setSelectedCategory(categoryIds[nextIndex]);
+      if (openedNewsId) {
+        closeNotificationNews();
+      }
+      newsListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    },
+    [
+      categories,
+      selectedCategory,
+      setSelectedCategory,
+      openedNewsId,
+      closeNotificationNews,
+    ],
+  );
 
-  const handleCategorySelect = useCallback((categoryId: string | null) => {
-    setSelectedCategory(categoryId);
-    if (openedNewsId) {
-      closeNotificationNews();
-    }
-    newsListRef.current?.scrollToOffset({ offset: 0, animated: true });
-  }, [setSelectedCategory, openedNewsId, closeNotificationNews]);
+  const handleCategorySelect = useCallback(
+    (categoryId: string | null) => {
+      setSelectedCategory(categoryId);
+      if (openedNewsId) {
+        closeNotificationNews();
+      }
+      newsListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    },
+    [setSelectedCategory, openedNewsId, closeNotificationNews],
+  );
 
-  const handleFeedCitySelect = useCallback((cityId: string | null) => {
-    setSelectedFeedCityId(cityId);
-    if (openedNewsId) closeNotificationNews();
-    viewedNewsIdsRef.current.clear();
-    newsListRef.current?.scrollToOffset({ offset: 0, animated: true });
-  }, [openedNewsId, closeNotificationNews]);
+  const handleFeedCitySelect = useCallback(
+    (cityId: string | null) => {
+      setSelectedFeedCityId(cityId);
+      if (openedNewsId) closeNotificationNews();
+      viewedNewsIdsRef.current.clear();
+      newsListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    },
+    [openedNewsId, closeNotificationNews],
+  );
 
-  const selectedPreferenceCities = cities.filter(city => selectedCityPreferences.includes(city._id));
-  const handleRemovePreferredCity = useCallback(async (cityId: string) => {
-    await saveCityPreferences(selectedCityPreferences.filter(id => id !== cityId));
-    viewedNewsIdsRef.current.clear();
-    newsListRef.current?.scrollToOffset({ offset: 0, animated: true });
-  }, [selectedCityPreferences, saveCityPreferences]);
+  const selectedPreferenceCities = cities.filter((city) =>
+    selectedCityPreferences.includes(city._id),
+  );
+  const handleRemovePreferredCity = useCallback(
+    async (cityId: string) => {
+      await saveCityPreferences(
+        selectedCityPreferences.filter((id) => id !== cityId),
+      );
+      viewedNewsIdsRef.current.clear();
+      newsListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    },
+    [selectedCityPreferences, saveCityPreferences],
+  );
 
   const categorySwipeGesture = Gesture.Pan()
     // Let the news feed keep handling normal vertical scrolling.
@@ -240,9 +377,9 @@ export default function HomeScreen() {
       const isSwipeRight = event.translationX > 60 || event.velocityX > 650;
 
       if (isSwipeLeft) {
-        changeCategoryBySwipe('next');
+        changeCategoryBySwipe("next");
       } else if (isSwipeRight) {
-        changeCategoryBySwipe('previous');
+        changeCategoryBySwipe("previous");
       }
     })
     .runOnJS(true);
@@ -252,12 +389,20 @@ export default function HomeScreen() {
   }, [loadData]);
 
   // Use primitive keys so refreshed city/preference arrays do not cause duplicate requests.
-  const cityKey = JSON.stringify(stateId
-    ? cities.filter(c => c.state?._id === stateId).map(c => c._id).sort()
-    : selectedFeedCityId === null ? [...selectedCityPreferences].sort()
-    : selectedFeedCityId ? [selectedFeedCityId] : []);
+  const cityKey = JSON.stringify(
+    stateId
+      ? cities
+          .filter((c) => c.state?._id === stateId)
+          .map((c) => c._id)
+          .sort()
+      : selectedFeedCityId === null
+        ? [...selectedCityPreferences].sort()
+        : selectedFeedCityId
+          ? [selectedFeedCityId]
+          : [],
+  );
   const dateMode = dateFilter.mode;
-  const selectedDate = dateFilter.mode === 'date' ? dateFilter.date : undefined;
+  const selectedDate = dateFilter.mode === "date" ? dateFilter.date : undefined;
   useEffect(() => {
     if (!preferencesLoaded || !isFocused || isRefreshingAll) return;
     const ids: string[] = JSON.parse(cityKey);
@@ -265,20 +410,42 @@ export default function HomeScreen() {
       category: selectedCategory || undefined,
       cityIds: stateId ? [] : ids,
       stateId: stateId || undefined,
-      dateFilter: dateMode === 'today' ? 'today' : undefined,
+      dateFilter: dateMode === "today" ? "today" : undefined,
       date: selectedDate,
     });
     void fetchAdvertisements(ids);
-  }, [selectedCategory, cityKey, stateId, dateMode, selectedDate, preferencesLoaded,
-    isFocused, isRefreshingAll, fetchVersion, fetchNews, fetchAdvertisements]);
+  }, [
+    selectedCategory,
+    cityKey,
+    stateId,
+    dateMode,
+    selectedDate,
+    preferencesLoaded,
+    isFocused,
+    isRefreshingAll,
+    fetchVersion,
+    fetchNews,
+    fetchAdvertisements,
+  ]);
 
+  useEffect(() => {
+    if (!preferencesLoaded || !isFocused || isRefreshingAll) return;
+    void fetchEmbeds({ category: selectedCategory || "all" });
+  }, [
+    selectedCategory,
+    preferencesLoaded,
+    isFocused,
+    isRefreshingAll,
+    fetchVersion,
+    fetchEmbeds,
+  ]);
 
   useEffect(() => {
     if (!incomingNewsId) return;
 
     setOpenedNewsId(incomingNewsId);
     setOpenedNewsSource(
-      incomingNewsSource === 'notification' ? 'notification' : 'share',
+      incomingNewsSource === "notification" ? "notification" : "share",
     );
   }, [incomingNewsId, incomingNewsSource]);
 
@@ -309,10 +476,12 @@ export default function HomeScreen() {
           });
         }
       } catch (notificationError) {
-        console.error('Fetch notification news error:', notificationError);
+        console.error("Fetch notification news error:", notificationError);
         if (!cancelled) {
           setNotificationNews(null);
-          setNotificationNewsError('This news could not be opened. It may have been removed.');
+          setNotificationNewsError(
+            "This news could not be opened. It may have been removed.",
+          );
         }
       } finally {
         if (!cancelled) setIsLoadingNotificationNews(false);
@@ -326,58 +495,90 @@ export default function HomeScreen() {
     };
   }, [openedNewsId]);
   const feedItems: FeedItem[] = [];
-  
+
   // 1. Inject ads/embeds that should appear before any news items (position === 0)
   advertisements.forEach((ad) => {
-    const position = ad.positionAfterNews !== undefined ? Number(ad.positionAfterNews) : 4;
-    const adCategories = ad.categories?.map(c => typeof c === 'string' ? c : c?._id).filter(Boolean) || [];
+    const position =
+      ad.positionAfterNews !== undefined ? Number(ad.positionAfterNews) : 4;
+    const adCategories =
+      ad.categories
+        ?.map((c) => (typeof c === "string" ? c : c?._id))
+        .filter(Boolean) || [];
     const isTargetingAll = adCategories.length === 0;
-    const matchesCategory = selectedCategory 
-      ? (isTargetingAll || adCategories.includes(selectedCategory)) 
+    const matchesCategory = selectedCategory
+      ? isTargetingAll || adCategories.includes(selectedCategory)
       : isTargetingAll;
 
     if (ad.isEnabled && position === 0 && matchesCategory) {
-      feedItems.push({ type: 'ad', data: ad, key: `${ad._id}-top` });
+      feedItems.push({ type: "ad", data: ad, key: `${ad._id}-top` });
     }
   });
   embeds.forEach((emb) => {
-    const position = emb.positionAfterNews !== undefined ? Number(emb.positionAfterNews) : 5;
-    const embCategories = emb.categories?.map(c => typeof c === 'string' ? c : c?._id).filter(Boolean) || [];
-    const isTargetingAll = embCategories.length === 0;
-    const matchesCategory = selectedCategory 
-      ? (isTargetingAll || embCategories.includes(selectedCategory)) 
+    const position =
+      emb.positionAfterNews !== undefined ? Number(emb.positionAfterNews) : 5;
+    const embCategories =
+      emb.categories
+        ?.map((c) => (typeof c === "string" ? c : c?._id))
+        .filter(Boolean) || [];
+    const isTargetingAll =
+      Array.isArray(emb.categories) && emb.categories.length === 0;
+    const matchesCategory = selectedCategory
+      ? isTargetingAll || embCategories.includes(selectedCategory)
       : isTargetingAll;
 
     if (emb.isEnabled && position === 0 && matchesCategory) {
-      feedItems.push({ type: 'embed', data: emb, key: `${emb._id}-top` });
+      feedItems.push({ type: "embed", data: emb, key: `${emb._id}-top` });
     }
   });
 
   // 2. Iterate news items and inject subsequent ads/embeds (position > 0)
   news.filter(hasRenderableNews).forEach((item, index) => {
-    feedItems.push({ type: 'news', data: item });
+    feedItems.push({ type: "news", data: item });
     advertisements.forEach((ad) => {
-      const position = ad.positionAfterNews !== undefined ? Number(ad.positionAfterNews) : 4;
-      const adCategories = ad.categories?.map(c => typeof c === 'string' ? c : c?._id).filter(Boolean) || [];
+      const position =
+        ad.positionAfterNews !== undefined ? Number(ad.positionAfterNews) : 4;
+      const adCategories =
+        ad.categories
+          ?.map((c) => (typeof c === "string" ? c : c?._id))
+          .filter(Boolean) || [];
       const isTargetingAll = adCategories.length === 0;
-      const matchesCategory = selectedCategory 
-        ? (isTargetingAll || adCategories.includes(selectedCategory)) 
+      const matchesCategory = selectedCategory
+        ? isTargetingAll || adCategories.includes(selectedCategory)
         : isTargetingAll;
 
-      if (ad.isEnabled && position > 0 && index + 1 === position && matchesCategory) {
-        feedItems.push({ type: 'ad', data: ad, key: `${ad._id}-${index}` });
+      if (
+        ad.isEnabled &&
+        position > 0 &&
+        index + 1 === position &&
+        matchesCategory
+      ) {
+        feedItems.push({ type: "ad", data: ad, key: `${ad._id}-${index}` });
       }
     });
     embeds.forEach((emb) => {
-      const position = emb.positionAfterNews !== undefined ? Number(emb.positionAfterNews) : 5;
-      const embCategories = emb.categories?.map(c => typeof c === 'string' ? c : c?._id).filter(Boolean) || [];
-      const isTargetingAll = embCategories.length === 0;
-      const matchesCategory = selectedCategory 
-        ? (isTargetingAll || embCategories.includes(selectedCategory)) 
+      const position =
+        emb.positionAfterNews !== undefined ? Number(emb.positionAfterNews) : 5;
+      const embCategories =
+        emb.categories
+          ?.map((c) => (typeof c === "string" ? c : c?._id))
+          .filter(Boolean) || [];
+      const isTargetingAll =
+        Array.isArray(emb.categories) && emb.categories.length === 0;
+      const matchesCategory = selectedCategory
+        ? isTargetingAll || embCategories.includes(selectedCategory)
         : isTargetingAll;
 
-      if (emb.isEnabled && position > 0 && index + 1 === position && matchesCategory) {
-        feedItems.push({ type: 'embed', data: emb, key: `${emb._id}-${index}` });
+      if (
+        emb.isEnabled &&
+        position > 0 &&
+        index + 1 === position &&
+        matchesCategory
+      ) {
+        feedItems.push({
+          type: "embed",
+          data: emb,
+          key: `${emb._id}-${index}`,
+        });
       }
     });
   });
@@ -385,20 +586,21 @@ export default function HomeScreen() {
   const regularFeedItems = notificationNews
     ? feedItems.filter(
         (feedItem) =>
-          feedItem.type !== 'news' || feedItem.data._id !== notificationNews._id,
+          feedItem.type !== "news" ||
+          feedItem.data._id !== notificationNews._id,
       )
     : feedItems;
 
   const displayedFeedItems: FeedItem[] = notificationNews
     ? [
-        { type: 'news', data: notificationNews },
-        { type: 'section', title: 'All News', key: 'all-news-section' },
+        { type: "news", data: notificationNews },
+        { type: "section", title: "All News", key: "all-news-section" },
         ...regularFeedItems,
       ]
     : regularFeedItems;
 
   const renderItem = ({ item, index }: { item: FeedItem; index: number }) => {
-    if (item.type === 'section') {
+    if (item.type === "section") {
       return (
         <View style={styles.allNewsSection}>
           <View style={styles.allNewsLine} />
@@ -409,21 +611,25 @@ export default function HomeScreen() {
         </View>
       );
     }
-    if (item.type === 'ad') return <AdCard item={item.data} />;
-    if (item.type === 'embed') return <EmbedCard item={item.data} />;
+    if (item.type === "ad") return <AdCard item={item.data} />;
+    if (item.type === "embed") return <EmbedCard item={item.data} />;
     return (
       <NewsCard
         item={item.data}
-        onOpen={() => router.push({
-          pathname: '/news/reader',
-          params: { id: item.data._id },
-        })}
+        onOpen={() =>
+          router.push({
+            pathname: "/news/reader",
+            params: { id: item.data._id },
+          })
+        }
       />
     );
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: themeStyles.bg }]}>
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: themeStyles.bg }]}
+    >
       <View style={[styles.container, { backgroundColor: themeStyles.bg }]}>
         <View style={[styles.hero, { backgroundColor: themeStyles.bg }]}>
           <View style={styles.heroTopRow}>
@@ -444,7 +650,7 @@ export default function HomeScreen() {
                   source={
                     settings?.appLogo
                       ? { uri: getMediaUrl(settings.appLogo) }
-                      : require('../../assets/images/logo.png')
+                      : require("../../assets/images/logo.png")
                   }
                   style={styles.logo}
                   contentFit="contain"
@@ -460,7 +666,11 @@ export default function HomeScreen() {
                 onPress={() => setShowAppGuide(true)}
                 hitSlop={12}
               >
-                <Ionicons name="help-circle-outline" size={25} color={AppPalette.brightOrange} />
+                <Ionicons
+                  name="help-circle-outline"
+                  size={25}
+                  color={AppPalette.brightOrange}
+                />
               </Pressable>
 
               <Pressable
@@ -468,7 +678,11 @@ export default function HomeScreen() {
                 onPress={() => setShowCityModal(true)}
                 hitSlop={12}
               >
-                <Ionicons name="location-outline" size={25} color={AppPalette.brightOrange} />
+                <Ionicons
+                  name="location-outline"
+                  size={25}
+                  color={AppPalette.brightOrange}
+                />
               </Pressable>
             </View>
           </View>
@@ -499,7 +713,10 @@ export default function HomeScreen() {
                   />
                   <Text
                     numberOfLines={1}
-                    style={[styles.selectedCityPillText, { color: themeStyles.text }]}
+                    style={[
+                      styles.selectedCityPillText,
+                      { color: themeStyles.text },
+                    ]}
                   >
                     {city.name}
                   </Text>
@@ -522,17 +739,132 @@ export default function HomeScreen() {
           </View>
         )}
 
+        <View
+          style={[
+            styles.categoryBar,
+            {
+              backgroundColor: themeStyles.card,
+              borderBottomColor: themeStyles.border,
+            },
+          ]}
+        >
+          <ScrollView
+            ref={categoryScrollRef}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            directionalLockEnabled
+            keyboardShouldPersistTaps="handled"
+            onLayout={(event) => {
+              categoryViewport.current = event.nativeEvent.layout.width;
+              centerCategory(selectedCategoryRef.current);
+            }}
+            contentContainerStyle={styles.categoryBarContent}
+          >
+            {categoryTabs.map((category) => {
+              const active = selectedCategory === category._id;
+              const key = category._id || "__all__";
+              const highlighted = category.isHighlighted === true;
+              const highlightBg = validCategoryColor(
+                category.backgroundColor,
+                AppPalette.brightOrange,
+              );
+              const tabColor = highlighted
+                ? validCategoryColor(category.textColor, "#FFFFFF")
+                : active
+                  ? AppPalette.brightOrange
+                  : themeStyles.textSecondary;
+              return (
+                <Pressable
+                  key={key}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: active }}
+                  onPress={() => handleCategorySelect(category._id)}
+                  onLayout={(event) => {
+                    const { x, width } = event.nativeEvent.layout;
+                    categoryLayouts.current[key] = { x, width };
+                    if (selectedCategoryRef.current === category._id)
+                      centerCategory(category._id);
+                  }}
+                  style={({ pressed }) => [
+                    styles.categoryTab,
+                    pressed && { opacity: 0.65 },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.categoryTabBody,
+                      highlighted && { backgroundColor: highlightBg },
+                    ]}
+                  >
+                    {highlighted && (
+                      <Animated.View style={{ opacity: categoryPulse }}>
+                        <Ionicons name="flash" size={14} color={tabColor} />
+                      </Animated.View>
+                    )}
+                    <Text
+                      numberOfLines={1}
+                      style={[
+                        styles.categoryTabText,
+                        {
+                          color: tabColor,
+                          fontWeight: active || highlighted ? "900" : "700",
+                        },
+                      ]}
+                    >
+                      {category.name}
+                    </Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.categoryUnderline,
+                      {
+                        backgroundColor: active
+                          ? highlighted
+                            ? highlightBg
+                            : AppPalette.brightOrange
+                          : "transparent",
+                      },
+                    ]}
+                  />
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+
         {!!openedNewsId && (
-          <View style={[styles.notificationNewsBar, { backgroundColor: themeStyles.card, borderColor: themeStyles.border }]}>
+          <View
+            style={[
+              styles.notificationNewsBar,
+              {
+                backgroundColor: themeStyles.card,
+                borderColor: themeStyles.border,
+              },
+            ]}
+          >
             <View style={styles.notificationNewsBarTextWrap}>
-              <Ionicons name="notifications" size={17} color={AppPalette.brightOrange} />
-              <Text style={[styles.notificationNewsBarText, { color: themeStyles.text }]} numberOfLines={1}>
-                {openedNewsSource === 'notification'
-                  ? 'News opened from notification'
-                  : 'News opened from shared link'}
+              <Ionicons
+                name="notifications"
+                size={17}
+                color={AppPalette.brightOrange}
+              />
+              <Text
+                style={[
+                  styles.notificationNewsBarText,
+                  { color: themeStyles.text },
+                ]}
+                numberOfLines={1}
+              >
+                {openedNewsSource === "notification"
+                  ? "News opened from notification"
+                  : "News opened from shared link"}
               </Text>
             </View>
-            <Pressable onPress={closeNotificationNews} hitSlop={8} style={styles.showAllButton}>
+            <Pressable
+              onPress={closeNotificationNews}
+              hitSlop={8}
+              style={styles.showAllButton}
+            >
               <Text style={styles.showAllButtonText}>Show all</Text>
             </Pressable>
           </View>
@@ -541,12 +873,21 @@ export default function HomeScreen() {
         <GestureDetector gesture={categorySwipeGesture}>
           <View style={styles.feedGestureArea}>
             {isLoadingNotificationNews ? (
-              <Text style={[styles.stateText, { color: themeStyles.textSecondary }]}>Opening selected news...</Text>
+              <Text
+                style={[styles.stateText, { color: themeStyles.textSecondary }]}
+              >
+                Opening selected news...
+              </Text>
             ) : notificationNewsError ? (
               <View style={styles.notificationErrorWrap}>
                 <Text style={styles.errorText}>{notificationNewsError}</Text>
-                <Pressable style={styles.backToFeedButton} onPress={closeNotificationNews}>
-                  <Text style={styles.backToFeedButtonText}>Back to all news</Text>
+                <Pressable
+                  style={styles.backToFeedButton}
+                  onPress={closeNotificationNews}
+                >
+                  <Text style={styles.backToFeedButtonText}>
+                    Back to all news
+                  </Text>
                 </Pressable>
               </View>
             ) : (
@@ -555,19 +896,55 @@ export default function HomeScreen() {
                 data={error ? [] : displayedFeedItems}
                 renderItem={renderItem}
                 keyExtractor={(item) =>
-                  item.type === 'news' ? `news-${item.data._id}` : item.key
+                  item.type === "news" ? `news-${item.data._id}` : item.key
                 }
                 contentContainerStyle={[styles.listContainer, { flexGrow: 1 }]}
                 style={styles.newsList}
                 scrollIndicatorInsets={{ bottom: 96 }}
                 showsVerticalScrollIndicator={false}
-                ListEmptyComponent={<View>
-                  <Text style={[styles.stateText, { color: error ? AppPalette.danger : themeStyles.textSecondary }]}>{error || (isLoading || isRefreshingAll || !preferencesLoaded ? 'Loading fresh stories...' : 'No news found for selected filters.')}</Text>
-                  {!!error && <Pressable onPress={loadData} style={{ alignSelf: 'center', padding: 16 }}><Text style={{ color: AppPalette.brightOrange, fontWeight: '800' }}>Retry</Text></Pressable>}
-                </View>}
+                ListEmptyComponent={
+                  <View>
+                    <Text
+                      style={[
+                        styles.stateText,
+                        {
+                          color: error
+                            ? AppPalette.danger
+                            : themeStyles.textSecondary,
+                        },
+                      ]}
+                    >
+                      {error ||
+                        (isLoading || isRefreshingAll || !preferencesLoaded
+                          ? "Loading fresh stories..."
+                          : "No news found for selected filters.")}
+                    </Text>
+                    {!!error && (
+                      <Pressable
+                        onPress={loadData}
+                        style={{ alignSelf: "center", padding: 16 }}
+                      >
+                        <Text
+                          style={{
+                            color: AppPalette.brightOrange,
+                            fontWeight: "800",
+                          }}
+                        >
+                          Retry
+                        </Text>
+                      </Pressable>
+                    )}
+                  </View>
+                }
                 onViewableItemsChanged={onViewableItemsChanged}
                 viewabilityConfig={viewabilityConfig}
-                refreshControl={<RefreshControl refreshing={isRefreshingAll || isLoading} onRefresh={loadData} tintColor={AppPalette.brightOrange} />}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={isRefreshingAll || isLoading}
+                    onRefresh={loadData}
+                    tintColor={AppPalette.brightOrange}
+                  />
+                }
               />
             )}
           </View>
@@ -588,7 +965,7 @@ export default function HomeScreen() {
             handleFeedCitySelect(filters.cityId);
             setStateId(filters.stateId);
             setDateFilter(filters.dateFilter);
-            setFetchVersion(v => v + 1);
+            setFetchVersion((v) => v + 1);
             if (openedNewsId) closeNotificationNews();
             viewedNewsIdsRef.current.clear();
             newsListRef.current?.scrollToOffset({ offset: 0, animated: false });
@@ -617,13 +994,13 @@ export default function HomeScreen() {
           selectedCityIds={selectedCityPreferences}
           required={false}
           onClose={async () => {
-            await SecureStore.setItemAsync(CITY_PREFERENCE_SETUP_KEY, 'true');
+            await SecureStore.setItemAsync(CITY_PREFERENCE_SETUP_KEY, "true");
             setShowCityModal(false);
             const guideDone = await hasCompletedAppGuide();
             if (!guideDone) setShowAppGuide(true);
           }}
           onSave={async (cityIds) => {
-            await SecureStore.setItemAsync(CITY_PREFERENCE_SETUP_KEY, 'true');
+            await SecureStore.setItemAsync(CITY_PREFERENCE_SETUP_KEY, "true");
             await saveCityPreferences(cityIds);
             setShowCityModal(false);
             const guideDone = await hasCompletedAppGuide();
@@ -631,41 +1008,44 @@ export default function HomeScreen() {
           }}
         />
 
-        <AppGuideOverlay visible={showAppGuide} onFinish={() => setShowAppGuide(false)} />
+        <AppGuideOverlay
+          visible={showAppGuide}
+          onFinish={() => setShowAppGuide(false)}
+        />
       </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#FFF5F5' },
-  container: { flex: 1, backgroundColor: '#FFF5F5' },
+  safeArea: { flex: 1, backgroundColor: "#FFF5F5" },
+  container: { flex: 1, backgroundColor: "#FFF5F5" },
   hero: {
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 0,
-    backgroundColor: '#FFF5F5',
+    backgroundColor: "#FFF5F5",
   },
   heroTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     gap: 10,
   },
   headerActions: {
     flexShrink: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
     gap: 8,
   },
   logoBox: {
     flex: 1,
     height: 56,
     minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "flex-start",
   },
 
   logoPressed: {
@@ -674,15 +1054,15 @@ const styles = StyleSheet.create({
 
   logoImageWrap: {
     flex: 1,
-    height: '100%',
-    width: '100%',
-    alignItems: 'flex-start',
-    justifyContent: 'center',
+    height: "100%",
+    width: "100%",
+    alignItems: "flex-start",
+    justifyContent: "center",
   },
 
   logo: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
   },
 
   logoTextWrap: {
@@ -692,10 +1072,10 @@ const styles = StyleSheet.create({
   },
 
   logoTitle: {
-    color: '#111111',
+    color: "#111111",
     fontSize: 22,
     lineHeight: 27,
-    fontWeight: '900',
+    fontWeight: "900",
     letterSpacing: -0.3,
   },
 
@@ -704,21 +1084,21 @@ const styles = StyleSheet.create({
     color: AppPalette.slate,
     fontSize: 11.5,
     lineHeight: 15,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   headerIconButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   eyebrow: {
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: "800",
     color: AppPalette.brightOrange,
     marginBottom: 3,
   },
   heroTitle: {
     fontSize: 28,
-    fontWeight: '900',
+    fontWeight: "900",
     color: AppPalette.ink,
     letterSpacing: -0.6,
   },
@@ -729,14 +1109,14 @@ const styles = StyleSheet.create({
   },
   selectedCitiesContent: {
     paddingHorizontal: 16,
-    alignItems: 'center',
+    alignItems: "center",
     gap: 8,
   },
   selectedCityPill: {
     maxWidth: 190,
     minHeight: 32,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 5,
     paddingLeft: 10,
     paddingRight: 5,
@@ -746,21 +1126,48 @@ const styles = StyleSheet.create({
   selectedCityPillText: {
     maxWidth: 125,
     fontSize: 12,
-    fontWeight: '900',
+    fontWeight: "900",
   },
   selectedCityRemove: {
     width: 24,
     height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  categoryBar: { borderBottomWidth: StyleSheet.hairlineWidth, marginBottom: 6 },
+  categoryBarContent: { paddingHorizontal: 8, alignItems: "stretch" },
+ categoryTab: {
+  minHeight: 38,
+  paddingBottom: 3,
+  paddingTop: 1,
+  justifyContent: 'center',
+},
+
+categoryTabBody: {
+  minHeight: 34,
+  paddingHorizontal: 12,
+  flexDirection: 'row',
+  gap: 4,
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+  categoryTabText: { fontSize: 15, letterSpacing: 0.1 },
+  categoryUnderline: {
+    position: "absolute",
+    left: 12,
+    right: 12,
+    bottom: 0,
+    height: 3,
+    borderTopLeftRadius: 2,
+    borderTopRightRadius: 2,
   },
   filterWrapper: { height: 42 },
   feedGestureArea: { flex: 1 },
   newsList: { flex: 1 },
   listContainer: { padding: 16, paddingTop: 6, paddingBottom: 120 },
   allNewsSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     marginTop: 12,
     marginBottom: 16,
@@ -769,12 +1176,12 @@ const styles = StyleSheet.create({
   allNewsLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#FECACA',
+    backgroundColor: "#FECACA",
   },
   allNewsTitle: {
     fontSize: 18,
     lineHeight: 24,
-    fontWeight: '900',
+    fontWeight: "900",
     letterSpacing: -0.2,
   },
   notificationNewsBar: {
@@ -785,21 +1192,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 14,
     borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     gap: 10,
   },
   notificationNewsBarTextWrap: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 7,
   },
-  notificationNewsBarText: { flex: 1, fontSize: 12, fontWeight: '800' },
+  notificationNewsBarText: { flex: 1, fontSize: 12, fontWeight: "800" },
   showAllButton: { paddingVertical: 8, paddingLeft: 8 },
-  showAllButtonText: { color: AppPalette.brightOrange, fontSize: 12, fontWeight: '900' },
-  notificationErrorWrap: { alignItems: 'center', paddingHorizontal: 20 },
+  showAllButtonText: {
+    color: AppPalette.brightOrange,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  notificationErrorWrap: { alignItems: "center", paddingHorizontal: 20 },
   backToFeedButton: {
     marginTop: 16,
     borderRadius: 999,
@@ -807,7 +1218,17 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     backgroundColor: AppPalette.brightOrange,
   },
-  backToFeedButtonText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
-  stateText: { textAlign: 'center', marginTop: 50, color: AppPalette.slate, fontWeight: '800' },
-  errorText: { textAlign: 'center', marginTop: 50, color: AppPalette.danger, fontWeight: '800' },
+  backToFeedButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
+  stateText: {
+    textAlign: "center",
+    marginTop: 50,
+    color: AppPalette.slate,
+    fontWeight: "800",
+  },
+  errorText: {
+    textAlign: "center",
+    marginTop: 50,
+    color: AppPalette.danger,
+    fontWeight: "800",
+  },
 });

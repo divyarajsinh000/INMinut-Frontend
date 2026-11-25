@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 interface Props {
   imageUri: string;
   imageHeight?: number;
+  fallbackImageUris?: string[];
   title?: string;
   description?: string;
   titleColor?: string;
@@ -82,9 +83,15 @@ const formatShareDate = (value?: string) => {
   return `${dayName}, ${day}${suffix} ${monthName} ${year}`;
 };
 
-export default function BrandedShareImage({
+export default function BrandedShareImage(props: Props) {
+  // Remount readiness state only when the requested image/logo changes.
+  return <ShareImageContent key={JSON.stringify([props.imageUri, props.fallbackImageUris, props.logoUrl])} {...props} />;
+}
+
+function ShareImageContent({
   imageUri,
   imageHeight,
+  fallbackImageUris = [],
   title,
   description,
   titleColor,
@@ -116,27 +123,24 @@ export default function BrandedShareImage({
     24,
     58,
   );
+  const candidates = [...new Set([imageUri, ...fallbackImageUris, 'breaking_placeholder'].filter(Boolean))];
+  const [imageIndex, setImageIndex] = useState(0);
+  const currentImage = candidates[Math.min(imageIndex, candidates.length - 1)];
+  const [logoFailed, setLogoFailed] = useState(false);
   const [mainImageLoaded, setMainImageLoaded] = useState(false);
-  const [logoLoaded, setLogoLoaded] = useState(!logoUrl);
+  const [logoLoaded, setLogoLoaded] = useState(false);
   const readyReportedRef = useRef(false);
-
-  useEffect(() => {
-    setMainImageLoaded(false);
-    setLogoLoaded(!logoUrl);
-    readyReportedRef.current = false;
-  }, [imageUri, logoUrl]);
+  const readyCallbackRef = useRef(onReady);
+  readyCallbackRef.current = onReady;
 
   useEffect(() => {
     if (!mainImageLoaded || !logoLoaded || readyReportedRef.current) return;
-
-    // Give React Native one additional frame to paint both images before capture.
     const timer = setTimeout(() => {
       readyReportedRef.current = true;
-      onReady?.();
+      readyCallbackRef.current?.();
     }, 150);
-
     return () => clearTimeout(timer);
-  }, [mainImageLoaded, logoLoaded, onReady]);
+  }, [mainImageLoaded, logoLoaded]);
 
   return (
     <View style={styles.card} collapsable={false}>
@@ -145,15 +149,19 @@ export default function BrandedShareImage({
         <View style={styles.cardHeader}>
           <View style={styles.logoBox}>
             <Image
+              key={logoFailed ? "bundled-logo" : (logoUrl || "bundled-logo")}
               source={
-                logoUrl
+                logoUrl && !logoFailed
                   ? { uri: logoUrl }
                   : require("../assets/images/logo.png")
               }
               style={styles.logo}
               contentFit="contain"
               onLoad={() => setLogoLoaded(true)}
-              onError={() => setLogoLoaded(true)}
+              onError={() => {
+                if (logoUrl && !logoFailed) setLogoFailed(true);
+                else setLogoLoaded(true);
+              }}
             />
           </View>
           {isBreaking && (
@@ -184,21 +192,25 @@ export default function BrandedShareImage({
         <View
           style={[
             styles.imageWrapper,
-            imageHeight ? { height: imageHeight } : null,
+            currentImage !== imageUri ? { height: 850 } : imageHeight ? { height: imageHeight } : null,
           ]}
         >
           <Image
+            key={currentImage}
             source={
-              imageUri === "breaking_placeholder"
+              currentImage === "breaking_placeholder"
                 ? require("../assets/images/breaking_placeholder.jpg")
-                : { uri: imageUri }
+                : { uri: currentImage }
             }
             style={styles.mainImage}
             contentFit={
-              imageUri === "breaking_placeholder" ? "cover" : "contain"
+              currentImage === "breaking_placeholder" ? "cover" : "contain"
             }
             onLoad={() => setMainImageLoaded(true)}
-            onError={() => setMainImageLoaded(true)}
+            onError={() => {
+              if (imageIndex < candidates.length - 1) setImageIndex(index => Math.max(index, imageIndex + 1));
+              else setMainImageLoaded(true);
+            }}
           />
         </View>
 

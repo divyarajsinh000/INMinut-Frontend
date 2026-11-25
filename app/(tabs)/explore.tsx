@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import NewsCard from '@/components/NewsCard';
 import EmbedCard from '@/components/EmbedCard';
 import { useAppStore } from '@/store';
-import { NewsItem, EmbedItem } from '@/api';
+import { NewsItem, EmbedItem, api } from '@/api';
 import { AppPalette } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -14,7 +14,12 @@ type SearchResultItem =
   | { type: 'embed'; data: EmbedItem; key: string };
 
 export default function SearchScreen() {
-  const { news, embeds, setSearchQuery, searchQuery, fetchNews, fetchEmbeds, isLoading } = useAppStore();
+  const { setSearchQuery, searchQuery } = useAppStore();
+  const [news, setNews] = useState<NewsItem[]>([]);
+  const [embeds, setEmbeds] = useState<EmbedItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [searchError, setSearchError] = useState(false);
+  const cityIds = useAppStore(s => s.selectedCityPreferences);
   const [localQuery, setLocalQuery] = useState(searchQuery);
 
   const colorScheme = useColorScheme();
@@ -29,12 +34,20 @@ export default function SearchScreen() {
   };
 
   useEffect(() => {
-    if (localQuery.trim()) {
-      const q = localQuery.trim();
-      fetchNews({ search: q });
-      fetchEmbeds({ search: q });
-    }
-  }, [localQuery, fetchNews, fetchEmbeds]);
+    let cancelled = false;
+    const q = localQuery.trim();
+    setNews([]); setEmbeds([]); setSearchError(false); setIsLoading(!!q);
+    if (!q) return;
+    const timer = setTimeout(async () => {
+      const results = await Promise.allSettled([api.getNews({ search: q, cityIds }), api.getEmbeds({ search: q })]);
+      if (cancelled) return;
+      setNews(results[0].status === 'fulfilled' ? results[0].value : []);
+      setEmbeds(results[1].status === 'fulfilled' ? results[1].value : []);
+      setSearchError(results.every(result => result.status === 'rejected'));
+      setIsLoading(false);
+    }, 350);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [localQuery, cityIds]);
 
   const handleSearch = useCallback((text: string) => {
     setLocalQuery(text);
@@ -42,7 +55,7 @@ export default function SearchScreen() {
   }, [setSearchQuery]);
 
   const matchingEmbeds = embeds.filter((emb) => {
-    if (emb.isEnabled === false) return false;
+    if (emb.isEnabled !== true) return false;
     if (!localQuery.trim()) return false;
     return emb.title?.toLowerCase().includes(localQuery.trim().toLowerCase());
   });
@@ -86,7 +99,7 @@ export default function SearchScreen() {
               showsVerticalScrollIndicator={false}
             />
           ) : (
-            <Text style={[styles.stateText, { color: themeStyles.textSecondary }]}>No results found</Text>
+            <Text style={[styles.stateText, { color: themeStyles.textSecondary }]}>{searchError ? 'Unable to search right now. Please try again.' : 'No results found'}</Text>
           )
         ) : (
           <Text style={[styles.stateText, { color: themeStyles.textSecondary }]}>Start typing to search...</Text>

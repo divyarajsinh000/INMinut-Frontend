@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { NewsItem, Category, City, Ad, EmbedItem, Settings, NewsQuery, api } from '@/api';
+import { NewsItem, Category, City, Ad, EmbedItem, Settings, NewsQuery, EmbedQuery, api } from '@/api';
 import * as SecureStore from '@/utils/storage';
 import { getOrCreateGuestId } from '@/utils/notifications';
 import { logger } from '@/utils/logger';
@@ -25,7 +25,7 @@ interface AppState {
 
   fetchNews: (params?: NewsQuery) => Promise<void>;
   fetchAdvertisements: (cityIds?: string[]) => Promise<void>;
-  fetchEmbeds: (params?: { search?: string }) => Promise<void>;
+  fetchEmbeds: (params?: EmbedQuery) => Promise<void>;
   fetchCategories: () => Promise<void>;
   fetchCities: () => Promise<void>;
   fetchSettings: () => Promise<void>;
@@ -48,6 +48,7 @@ interface AppState {
 
 let newsRequest = 0;
 let adRequest = 0;
+let embedRequest = 0;
 
 export const useAppStore = create<AppState>((set, get) => ({
   news: [],
@@ -92,12 +93,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   fetchEmbeds: async (params) => {
+    const request = ++embedRequest;
     try {
       const embeds = await api.getEmbeds(params);
-      set({ embeds });
+      if (request === embedRequest) set({ embeds });
     } catch (err) {
       console.error('Fetch embeds error:', err);
-      set({ embeds: [] });
+      if (request === embedRequest) set({ embeds: [] });
     }
   },
 

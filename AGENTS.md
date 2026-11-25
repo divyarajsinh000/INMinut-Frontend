@@ -23,6 +23,7 @@
 - Push notifications, guest registration, deep links → `.agents/skills/notifications/SKILL.md`
 - Images, video, PDF, share → `.agents/skills/media-sharing/SKILL.md`
 - Expo/EAS, updates, builds, environment → `.agents/skills/build-release/SKILL.md`
+- Embed cards, WebView, category targeting → `.agents/skills/embeds-webview/SKILL.md`
 - Safe implementation, debugging, verification → `.agents/skills/change-workflow/SKILL.md`
 
 ## Project conventions

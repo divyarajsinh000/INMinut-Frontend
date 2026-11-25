@@ -1,5 +1,6 @@
 import {
   Alert,
+  Linking,
   Platform,
   Share,
   StyleSheet,
@@ -11,7 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { WebView } from "react-native-webview";
 import { EmbedItem } from "@/api";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useCallback, useState } from "react";
 import { useAppStore } from "@/store";
 
 interface EmbedCardProps {
@@ -134,28 +135,32 @@ const extractEmbedShareUrl = (embedCode: string) => {
   return "";
 };
 
-const getProcessedEmbedUrl = (value: string) => {
-  const trimmed = String(value || "").trim();
+const escapeAttribute = (value: string) => value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-  if (
-    !/^https?:\/\//i.test(trimmed) ||
-    trimmed.includes(" ") ||
-    trimmed.includes("<iframe") ||
-    trimmed.includes("<script") ||
-    trimmed.includes("<blockquote")
-  ) {
-    return null;
-  }
+// Match the actual authority, not a provider name embedded in another URL.
+const getProcessedEmbedUrl = (value: string): string | null => {
+  const url = normalizeProtocolUrl(value);
+  if (!url || /[\s<>"']/.test(url)) return null;
+  const youtube = url.match(/^https?:\/\/(?:www\.|m\.)?youtube\.com\/(?:embed\/|v\/|shorts\/|live\/)([\w-]{11})(?:[/?#]|$)/i)
+    || url.match(/^https?:\/\/youtu\.be\/([\w-]{11})(?:[/?#]|$)/i)
+    || (/^https?:\/\/(?:www\.|m\.)?youtube\.com\/watch\?/i.test(url) ? url.match(/[?&]v=([\w-]{11})(?:[&#]|$)/) : null);
+  if (youtube) return `https://www.youtube.com/embed/${youtube[1]}`;
+  const instagram = url.match(/^https?:\/\/(?:www\.)?instagram\.com\/(p|reel|tv)\/([\w-]+)(?:[/?#]|$)/i);
+  if (instagram) return `https://www.instagram.com/${instagram[1]}/${instagram[2]}/embed/`;
+  const spotify = url.match(/^https?:\/\/open\.spotify\.com\/(?:embed\/)?(track|episode|album|playlist|show|artist)\/([a-zA-Z0-9]+)(?:[/?#]|$)/i);
+  if (spotify) return `https://open.spotify.com/embed/${spotify[1]}/${spotify[2]}`;
+  const vimeo = url.match(/^https?:\/\/(?:www\.)?vimeo\.com\/(\d+)(?:[/?#]|$)/i);
+  if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}`;
+  return url;
+};
 
-  const youtubeMatch = trimmed.match(
-    /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/|live\/))([^"&?/\s]{11})/i,
-  );
-
-  if (youtubeMatch?.[1]) {
-    return `https://www.youtube.com/embed/${youtubeMatch[1]}`;
-  }
-
-  return trimmed;
+const externalContentUrl = (value: string) => {
+  const url = normalizeProtocolUrl(value);
+  if (!url || /[\s<>"']/.test(url)) return "";
+  return url.replace(/^(https:\/\/www\.youtube\.com)\/embed\/([\w-]{11}).*$/i, "$1/watch?v=$2")
+    .replace(/^(https:\/\/www\.instagram\.com\/(?:p|reel|tv)\/[\w-]+)\/embed\/?(?:[?#].*)?$/i, "$1/")
+    .replace(/^(https:\/\/open\.spotify\.com)\/embed\//i, "$1/")
+    .replace(/^https:\/\/player\.vimeo\.com\/video\/(\d+).*$/i, "https://vimeo.com/$1");
 };
 
 const generateHtml = (
@@ -246,14 +251,14 @@ const generateHtml = (
               );
             }
 
-            window.focus();
+            // Do not force focus back from an embedded player.
           }
         }, 150);
       });
     </script>
 
     ${
-      /instagram-media/i.test(embedCode)
+      /instagram-media/i.test(embedCode) && !/instagram\.com\/embed\.js/i.test(embedCode)
         ? '<script async src="https://www.instagram.com/embed.js"></script>'
         : ""
     }
@@ -264,14 +269,24 @@ export default function EmbedCard({ item }: EmbedCardProps) {
   const contentHeight = Math.max(80, Number(item.height) || 250);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
-  const { trackEmbedInteraction } = useAppStore();
+  const trackEmbedInteraction = useAppStore(state => state.trackEmbedInteraction);
+  const lastClick = useRef(0);
+  const lastExternal = useRef(0);
+  const [failed, setFailed] = useState(false);
+  const [retry, setRetry] = useState(0);
+  const trackClick = useCallback(() => {
+    const now = Date.now();
+    if (now - lastClick.current < 900) return;
+    lastClick.current = now;
+    void trackEmbedInteraction(item._id, "click");
+  }, [item._id, trackEmbedInteraction]);
   const containerRef = useRef<any>(null);
 
   const directUrl = getProcessedEmbedUrl(item.embedCode);
 
   const processedEmbedCode = directUrl
     ? `<iframe
-         src="${directUrl}"
+         src="${escapeAttribute(directUrl)}"
          width="100%"
          height="100%"
          style="border:none;border-radius:8px;min-height:${Math.max(
@@ -283,10 +298,49 @@ export default function EmbedCard({ item }: EmbedCardProps) {
        ></iframe>`
     : item.embedCode;
 
-  const shareUrl = useMemo(
-    () => extractEmbedShareUrl(item.embedCode),
-    [item.embedCode],
-  );
+const contentUrl = useMemo(
+  () => externalContentUrl(
+    extractEmbedShareUrl(item.embedCode)
+  ),
+  [item.embedCode],
+);
+
+const shareUrl = useMemo(
+  () => externalContentUrl(item.shareUrl || "") || contentUrl,
+  [item.shareUrl, contentUrl],
+);
+  const html = useMemo(() => generateHtml(processedEmbedCode, isDark), [processedEmbedCode, isDark]);
+  const source = useMemo(() => ({ html, baseUrl: "https://inminut.com/" }), [html]);
+  useEffect(() => { setFailed(false); lastClick.current = 0; lastExternal.current = 0; }, [item._id, item.embedCode]);
+
+  const openExternal = useCallback(async (url: string, fallback?: string) => {
+    if (Date.now() - lastExternal.current < 900) return;
+    lastExternal.current = Date.now();
+    trackClick();
+    try { await Linking.openURL(url); }
+    catch {
+      if (fallback && fallback !== url) {
+        try { await Linking.openURL(fallback); return; } catch { /* show friendly error */ }
+      }
+      Alert.alert("Unable to open content", "The external app or website is unavailable.");
+    }
+  }, [trackClick]);
+
+  const handleNavigation = useCallback((request: { url: string }) => {
+    const url = request.url || "";
+    if (/^https?:\/\//i.test(url) || url === "about:blank" || url === "about:srcdoc") return true;
+    const instagram = url.match(/^intent:\/\/applink\.instagram\.com\/(p|reel|tv)\/([\w-]+)(?:[/?#]|$)/i);
+    if (instagram) {
+      void openExternal(`https://www.instagram.com/${instagram[1]}/${instagram[2]}/`);
+    } else if (/^spotify:(?:\/\/open(?:[/?#]|$)|(?:track|episode|album|playlist|show|artist):[a-zA-Z0-9]+$)/i.test(url)) {
+      const fallback = /^https:\/\/open\.spotify\.com\//i.test(shareUrl) ? shareUrl : "https://open.spotify.com/";
+      void openExternal(url, fallback);
+    } else if (/^(?:instagram|youtube|vnd\.youtube|whatsapp):/i.test(url)) {
+      // Use the original HTTPS content instead of executing arbitrary native intent payloads.
+      if (shareUrl) void openExternal(shareUrl);
+    }
+    return false;
+  }, [openExternal, shareUrl]);
 
   useEffect(() => {
     trackEmbedInteraction(item._id, "view");
@@ -304,8 +358,7 @@ export default function EmbedCard({ item }: EmbedCardProps) {
           activeElement.tagName === "IFRAME" &&
           containerRef.current?.contains(activeElement)
         ) {
-          trackEmbedInteraction(item._id, "click");
-          window.focus();
+          trackClick();
         }
       }, 150);
     };
@@ -315,7 +368,7 @@ export default function EmbedCard({ item }: EmbedCardProps) {
     return () => {
       window.removeEventListener("blur", handleBlur);
     };
-  }, [item._id, trackEmbedInteraction]);
+  }, [trackClick]);
 
   const handleShare = async () => {
     const cleanTitle = String(item.title || "Shared from INMinut").trim();
@@ -407,23 +460,12 @@ export default function EmbedCard({ item }: EmbedCardProps) {
       >
         {header}
 
-        <div
-          ref={containerRef}
-          style={{
-            height: contentHeight,
-            overflow: "hidden",
-            padding: 8,
-            boxSizing: "border-box",
-            backgroundColor: isDark ? "#1E293B" : "#FFFFFF",
-            cursor: "pointer",
-          }}
-          onClick={() =>
-            trackEmbedInteraction(item._id, "click")
-          }
-          dangerouslySetInnerHTML={{
-            __html: processedEmbedCode,
-          }}
-        />
+        <div ref={containerRef} style={{ height: contentHeight }}>
+          <iframe title={item.title} srcDoc={html}
+            sandbox="allow-scripts allow-presentation allow-popups allow-popups-to-escape-sandbox"
+            allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+            allowFullScreen style={{ width: "100%", height: "100%", border: 0 }} />
+        </div>
       </View>
     );
   }
@@ -436,14 +478,24 @@ export default function EmbedCard({ item }: EmbedCardProps) {
       ]}
     >
       {header}
-
+      {!!shareUrl && <TouchableOpacity accessibilityRole="button" onPress={() => void openExternal(shareUrl)} style={{ alignSelf: "flex-end", paddingHorizontal: 14, paddingVertical: 7 }}><Text style={{ color: isDark ? "#FB923C" : "#C2410C", fontSize: 12 }}>Open externally ↗</Text></TouchableOpacity>}
       <View style={{ height: contentHeight }}>
-        <WebView
+        {failed ? (
+          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 12, gap: 12 }}>
+            <Text style={{ color: isDark ? "#F8FAFC" : "#111827" }}>Unable to load embedded content.</Text>
+            <TouchableOpacity onPress={() => { setFailed(false); setRetry(n => n + 1); }}><Text style={{ color: "#F97316" }}>Retry</Text></TouchableOpacity>
+            {!!shareUrl && <TouchableOpacity onPress={() => void openExternal(shareUrl)}><Text style={{ color: "#F97316" }}>Open in browser</Text></TouchableOpacity>}
+          </View>
+        ) : <WebView
+          key={`${item._id}-${retry}`}
           originWhitelist={["*"]}
-          source={{
-            html: generateHtml(processedEmbedCode, isDark),
-            baseUrl: "https://www.instagram.com",
-          }}
+          source={source}
+          onShouldStartLoadWithRequest={handleNavigation}
+          onError={() => setFailed(true)}
+          allowsInlineMediaPlayback
+          allowFileAccess={false}
+          allowFileAccessFromFileURLs={false}
+          allowUniversalAccessFromFileURLs={false}
           style={styles.webview}
           javaScriptEnabled
           domStorageEnabled
@@ -452,17 +504,16 @@ export default function EmbedCard({ item }: EmbedCardProps) {
           allowsFullscreenVideo
           showsVerticalScrollIndicator={false}
           showsHorizontalScrollIndicator={false}
-          mixedContentMode="always"
+          mixedContentMode="never"
           thirdPartyCookiesEnabled
-          sharedCookiesEnabled
+          sharedCookiesEnabled={false}
           setSupportMultipleWindows={false}
-          backgroundColor={isDark ? "#1E293B" : "#FFFFFF"}
           onMessage={(event) => {
             try {
               const data = JSON.parse(event.nativeEvent.data);
 
               if (data?.type === "click") {
-                trackEmbedInteraction(item._id, "click");
+                trackClick();
               }
             } catch (error) {
               console.error(
@@ -471,7 +522,7 @@ export default function EmbedCard({ item }: EmbedCardProps) {
               );
             }
           }}
-        />
+        />}
       </View>
     </View>
   );

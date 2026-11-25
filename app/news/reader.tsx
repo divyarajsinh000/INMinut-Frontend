@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Alert, Animated, FlatList, Linking, Platform, Pressable,
+  AccessibilityInfo, ActivityIndicator, Alert, Linking, Modal, Platform, Pressable,
   ScrollView, StyleSheet, Text, View, useWindowDimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { Easing, interpolate, Extrapolation, runOnJS, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
+import * as Storage from '@/utils/storage';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,8 +19,23 @@ import { getImageMedia, getMediaUrl } from '@/utils/media';
 import MediaDisplay from '@/components/MediaDisplay';
 import FullScreenImageViewer from '@/components/FullScreenImageViewer';
 import { shareNewsDirect } from '@/utils/share';
+import { getShareImageCandidates } from '@/utils/newsImages';
+import BrandedShareImage from '@/components/BrandedShareImage';
+import { captureRef } from 'react-native-view-shot';
 
 const ORANGE = '#F97316';
+const ANIMATION_KEY = 'reader_animation';
+type ReaderAnimation = 'lift' | 'zoom' | 'fold';
+const ANIMATIONS = [
+  { id: 'lift', title: 'Card Lift', description: 'Classic depth and stacking', icon: 'layers-outline' },
+  { id: 'zoom', title: 'Zoom & Fade', description: 'Soft cinematic zoom', icon: 'scan-outline' },
+  { id: 'fold', title: '3D Paper Fold', description: 'Magazine-style page tilt', icon: 'book-outline' },
+] as const;
+const isAnimation = (value: unknown): value is ReaderAnimation => value === 'lift' || value === 'zoom' || value === 'fold';
+type ReaderGestureProps = {
+  index: number; total: number; position: SharedValue<number>; locked: SharedValue<boolean>;
+  onTransitionStart: () => void; onTransitionEnd: (index: number) => void; reducedMotion: boolean;
+};
 const canDisplay = (item: NewsItem) => item.isActive !== false &&
   (!!item.title?.trim() || !!item.description?.trim() || !!item.content?.trim() ||
     (item.media || []).some((media) => !!media?.url));
@@ -36,14 +54,80 @@ function ReaderVideo({ uri, height, active }: { uri: string; height: number; act
   return (
     <View style={[styles.videoWrap, { height }]}>
       <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="contain"
-        nativeControls allowsFullscreen />
+        nativeControls allowsFullscreen surfaceType="textureView" />
     </View>
   );
 }
 
-function ReaderStory({ item, height, active }: { item: NewsItem; height: number; active: boolean }) {
+function ReaderStory({ item, height, active, transitioning, index, total, position, locked, onTransitionStart, onTransitionEnd, reducedMotion }:
+  { item: NewsItem; height: number; active: boolean; transitioning: boolean } & ReaderGestureProps) {
+  const offset = useSharedValue(0);
+  const contentSize = useSharedValue(0);
+  const viewport = useSharedValue(height);
+  const touchX = useSharedValue(0);
+  const touchY = useSharedValue(0);
+  const startedAtTop = useSharedValue(false);
+  const startedAtBottom = useSharedValue(false);
+  const ownsGesture = useSharedValue(false);
+  const shareInProgress = useSharedValue(false);
+  const pageDirection = useSharedValue(0);
+  const onArticleScroll = useAnimatedScrollHandler({ onScroll: (e) => { offset.value = e.contentOffset.y; } });
+  // Decide ownership once, before the inner native scroll can activate.
+  // A gesture that starts inside a long article never becomes a page swipe halfway through.
+  const pagePan = Gesture.Pan().manualActivation(true).maxPointers(1)
+    .onTouchesDown((e, manager) => {
+      if (!active || locked.value || shareInProgress.value || e.allTouches.length !== 1) { manager.fail(); return; }
+      const touch = e.allTouches[0];
+      touchX.value = touch.absoluteX; touchY.value = touch.absoluteY;
+      const max = Math.max(0, contentSize.value - viewport.value);
+      pageDirection.value = 0;
+      startedAtTop.value = offset.value <= 3;
+      startedAtBottom.value = offset.value >= max - 3;
+    })
+    .onTouchesMove((e, manager) => {
+      if (ownsGesture.value) return;
+      if (locked.value || shareInProgress.value || e.allTouches.length !== 1) { manager.fail(); return; }
+      const touch = e.allTouches[0];
+      const dx = touch.absoluteX - touchX.value, dy = touch.absoluteY - touchY.value;
+      if (Math.abs(dx) > 10 && Math.abs(dx) >= Math.abs(dy)) { manager.fail(); return; }
+      if (Math.abs(dy) < 10) return;
+      if ((dy < 0 && startedAtBottom.value && index < total - 1) ||
+          (dy > 0 && startedAtTop.value && index > 0)) {
+        pageDirection.value = dy < 0 ? 1 : -1;
+        manager.activate();
+      } else manager.fail();
+    })
+    .onTouchesUp((_e, manager) => { if (!ownsGesture.value) manager.fail(); })
+    .onStart(() => {
+      ownsGesture.value = true; locked.value = true;
+      runOnJS(onTransitionStart)();
+    })
+    .onUpdate((e) => {
+      const delta = Math.max(pageDirection.value < 0 ? -1 : 0, Math.min(pageDirection.value > 0 ? 1 : 0, -e.translationY / Math.max(1, height)));
+      position.value = index + delta;
+    })
+    .onEnd((e, success) => {
+      if (!success) return;
+      ownsGesture.value = false;
+      const delta = position.value - index;
+      const direction = Math.abs(delta) > 0.18 ? Math.sign(delta) : Math.abs(e.velocityY) > 650 && Math.abs(delta) > 0.035 && Math.sign(delta) === Math.sign(-e.velocityY) ? Math.sign(delta) : 0;
+      const next = Math.min(total - 1, Math.max(0, index + direction));
+      position.value = withTiming(next, { duration: reducedMotion ? 120 : 260, easing: Easing.out(Easing.cubic) }, (finished) => {
+        if (finished) runOnJS(onTransitionEnd)(next);
+      });
+    })
+    .onFinalize(() => {
+      if (!ownsGesture.value) return;
+      ownsGesture.value = false;
+      position.value = withTiming(index, { duration: 180 }, (finished) => {
+        if (finished) runOnJS(onTransitionEnd)(index);
+      });
+    });
+  const nativeScroll = Gesture.Native().requireExternalGestureToFail(pagePan);
+
   const { width, height: screenHeight } = useWindowDimensions();
   const theme = useAppStore((s) => s.theme);
+  const settings = useAppStore((s) => s.settings);
   const likedNews = useAppStore((s) => s.likedNews);
   const savedNews = useAppStore((s) => s.savedNews);
   const toggleLikedNews = useAppStore((s) => s.toggleLikedNews);
@@ -57,6 +141,10 @@ function ReaderStory({ item, height, active }: { item: NewsItem; height: number;
   const images = useMemo(() => getImageMedia(item.media || []), [item.media]);
   const videos = (item.media || []).filter((m) => m.type === 'video' && !!m.url);
   const otherMedia = (item.media || []).filter((m) => m.type !== 'image' && m.type !== 'video' && !!m.url);
+  const [captureImages, setCaptureImages] = useState<string[]>([]);
+  const captureView = useRef<View>(null);
+  const captureReady = useRef<(() => void) | null>(null);
+  const sharingRef = useRef(false);
   const [imageIndex, setImageIndex] = useState(0);
   const [imageRatios, setImageRatios] = useState<Record<string, number>>({});
   const [previewVisible, setPreviewVisible] = useState(false);
@@ -80,33 +168,70 @@ function ReaderStory({ item, height, active }: { item: NewsItem; height: number;
     } catch { Alert.alert('Unable to open link', 'Please try again.'); }
   };
 
+  const shareBranded = async (whatsapp: boolean) => {
+    let NativeShare: any;
+    try { NativeShare = require('react-native-share').default || require('react-native-share'); }
+    catch { throw new Error('Native sharing requires a development build'); }
+    if (!NativeShare) throw new Error('Native sharing unavailable');
+    const candidates = getShareImageCandidates(item.media, settings);
+    const ready = new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        captureReady.current = null;
+        reject(new Error('Share image took too long to load'));
+      }, 12000);
+      captureReady.current = () => { clearTimeout(timer); captureReady.current = null; resolve(); };
+    });
+    setCaptureImages(candidates);
+    try {
+      await ready;
+      if (!captureView.current) throw new Error('Share image is not ready');
+      const captured = await captureRef(captureView, { format: 'jpg', quality: 0.95, result: 'tmpfile', width: 1080 });
+      const url = captured.startsWith('file://') ? captured : `file://${captured}`;
+      const message = `View Post : ${storyUrl}\n\nDownload App : https://play.google.com/store/apps/details?id=com.inminut`;
+      const options = { url, type: 'image/jpeg', message, failOnCancel: false };
+      const result = whatsapp
+        ? await NativeShare.shareSingle({ ...options, social: NativeShare.Social.WHATSAPP })
+        : await NativeShare.open({ ...options, title: item.title || 'Share INMinut news' });
+      return result?.success !== false;
+    } finally { setCaptureImages([]); }
+  };
+
   const onShare = async () => {
-    if (sharing || whatsappSharing) return;
+    if (sharingRef.current || !active || transitioning) return;
+    sharingRef.current = true;
+    shareInProgress.value = true;
     setSharing(true);
     try {
-      const shared = await shareNewsDirect({
-        title: item.title, description: item.description, content: item.content,
-        media: item.media || [], hashtags: item.hashtags || [], cities: item.cities || [],
-        publishedDate: item.publishedDate, link: storyUrl,
-      });
+      const shared = Platform.OS !== 'web' && !videos.length && !otherMedia.length
+        ? await shareBranded(false)
+        : await shareNewsDirect({
+          title: item.title, description: item.description, content: item.content,
+          media: item.media || [], hashtags: item.hashtags || [], cities: item.cities || [],
+          publishedDate: item.publishedDate, link: storyUrl,
+        });
       if (shared !== false) await trackNewsShare(item._id);
     } catch { Alert.alert('Share failed', 'Unable to share this news right now.'); }
-    finally { setSharing(false); }
+    finally { sharingRef.current = false; shareInProgress.value = false; setSharing(false); }
   };
 
   const shareWhatsapp = async () => {
-    if (sharing || whatsappSharing) return;
+    if (sharingRef.current || !active || transitioning) return;
+    sharingRef.current = true;
+    shareInProgress.value = true;
     setWhatsappSharing(true);
     try {
-      // WhatsApp-specific link share. Unlike Home's branded-image share this does not capture a PNG.
       const message = `${item.title || 'INMinut News'}\n${storyUrl}`;
       if (Platform.OS === 'web') {
         await openExternal(`https://wa.me/?text=${encodeURIComponent(message)}`);
+      } else if (!videos.length && !otherMedia.length) {
+        if (!(await shareBranded(true))) return;
       } else {
+        // Preserve existing link sharing for video/PDF articles in the reader.
         let NativeShare: any;
         try { NativeShare = require('react-native-share').default; } catch { NativeShare = null; }
         if (NativeShare?.shareSingle) {
-          await NativeShare.shareSingle({ social: NativeShare.Social.WHATSAPP, message });
+          const result = await NativeShare.shareSingle({ social: NativeShare.Social.WHATSAPP, message, failOnCancel: false });
+          if (result?.success === false) return;
         } else {
           await openExternal(`https://wa.me/?text=${encodeURIComponent(message)}`);
         }
@@ -115,13 +240,21 @@ function ReaderStory({ item, height, active }: { item: NewsItem; height: number;
     } catch (error: any) {
       if (!/cancel|dismiss/i.test(String(error?.message || error)))
         Alert.alert('WhatsApp share failed', 'Please try again.');
-    } finally { setWhatsappSharing(false); }
+    } finally { sharingRef.current = false; shareInProgress.value = false; setWhatsappSharing(false); }
   };
 
   return (
-    <ScrollView style={[styles.articleScroll, { height, backgroundColor: bg }]}
-      contentContainerStyle={{ minHeight: height, paddingBottom: 35 }}
-      showsVerticalScrollIndicator={false} nestedScrollEnabled
+    <GestureDetector gesture={pagePan}>
+    <View style={{ flex: 1 }} collapsable={false}>
+    <GestureDetector gesture={nativeScroll}>
+    <Animated.ScrollView style={[styles.articleScroll, { height, backgroundColor: bg }]}
+      contentContainerStyle={{ flexGrow: 1 }}
+      scrollEnabled={active && !transitioning}
+      onScroll={onArticleScroll} scrollEventThrottle={16}
+      onContentSizeChange={(_, h) => { contentSize.value = h; }}
+      onLayout={(e) => { viewport.value = e.nativeEvent.layout.height; }}
+      showsVerticalScrollIndicator={false} nestedScrollEnabled={false}
+      directionalLockEnabled bounces={false} overScrollMode="never"
     >
       <View style={[styles.articleBody, { backgroundColor: bg }]}>
         <View style={styles.metadata}>
@@ -166,7 +299,7 @@ function ReaderStory({ item, height, active }: { item: NewsItem; height: number;
 
       {images.length > 0 && (
         <View style={[styles.hero, { width: articleWidth, height: mediaHeight }]}>
-          <ScrollView horizontal pagingEnabled bounces={false}
+          <ScrollView horizontal pagingEnabled bounces={false} directionalLockEnabled scrollEnabled={active && !transitioning}
             showsHorizontalScrollIndicator={false}
             onMomentumScrollEnd={(e) => setImageIndex(Math.min(images.length - 1,
               Math.max(0, Math.round(e.nativeEvent.contentOffset.x / Math.max(1, articleWidth)))))}>
@@ -193,10 +326,10 @@ function ReaderStory({ item, height, active }: { item: NewsItem; height: number;
           </Pressable>
         </View>
       )}
-      {active && videos.map((media, index) => (
+      {videos.map((media, index) => active ? (
         <ReaderVideo key={`${item._id}-${media.url}-${index}`} uri={getMediaUrl(media.url)}
-          height={videoHeight} active={active} />
-      ))}
+          height={videoHeight} active={!transitioning} />
+      ) : <View key={`${item._id}-${media.url}-${index}`} style={[styles.videoWrap, { height: videoHeight }]} />)}
 
         {!!item.description?.trim() && <RenderHTML contentWidth={Math.max(1, articleWidth)}
           source={{ html: item.description }}
@@ -211,10 +344,55 @@ function ReaderStory({ item, height, active }: { item: NewsItem; height: number;
           {item.hashtags.map((t) => t.startsWith('#') ? t : `#${t}`).join('  ')}
         </Text>}
       </View>
-      <FullScreenImageViewer visible={previewVisible} media={images} initialIndex={imageIndex}
+    </Animated.ScrollView>
+    </GestureDetector>
+      {captureImages.length > 0 && <View pointerEvents="none" style={{ position: 'absolute', left: -12000, top: 0, width: 1080 }}>
+        <View ref={captureView} collapsable={false}>
+          <BrandedShareImage imageUri={captureImages[0]} fallbackImageUris={captureImages.slice(1)}
+            imageHeight={images.length && imageRatios[images[0].url] ? Math.min(1800, Math.round(972 / imageRatios[images[0].url])) : 850}
+            title={item.title} description={(item.description || item.content || '').replace(/<[^>]*>/g, '')}
+            titleColor={item.titleColor || '#111111'} titleFontSize={Number(item.titleFontSize) || 20}
+            descriptionFontSize={Number(item.descriptionFontSize) || 14} publishedDate={item.publishedDate}
+            reporterName={item.hideReporter ? undefined : item.reporter?.name} isBreaking={item.isBreaking}
+            breakingText={item.breakingText} breakingTextColor={item.breakingTextColor}
+            logoUrl={settings?.appLogo ? getMediaUrl(settings.appLogo) : undefined}
+            onReady={() => captureReady.current?.()} />
+        </View>
+      </View>}
+      <FullScreenImageViewer visible={previewVisible && active} media={images} initialIndex={imageIndex}
         onClose={() => setPreviewVisible(false)} />
-    </ScrollView>
+    </View>
+    </GestureDetector>
   );
+}
+
+function ReaderPage({ item, height, active, transitioning, animation, background, ...gestureProps }:
+  { item: NewsItem; height: number; active: boolean; transitioning: boolean; animation: ReaderAnimation; background: string } & ReaderGestureProps) {
+  const { index, position, reducedMotion } = gestureProps;
+  const style = useAnimatedStyle(() => {
+    const d = Math.max(-1, Math.min(1, index - position.value));
+    const a = Math.abs(d);
+    if (reducedMotion) return { opacity: 1, transform: [{ translateY: d * height }] };
+    if (animation === 'zoom') return {
+      opacity: interpolate(a, [0, 1], [1, 0], Extrapolation.CLAMP),
+      transform: [{ translateY: d * height * 0.48 }, { scale: d > 0 ? 1 + a * 0.12 : 1 - a * 0.30 }],
+    };
+    if (animation === 'fold') return {
+      opacity: interpolate(a, [0, 0.9, 1], [1, 1, 0], Extrapolation.CLAMP), transform: [{ perspective: 1000 }, { translateY: d * height * 0.80 }, { rotateX: `${d * -52}deg` }, { scale: 1 - a * 0.12 }],
+    };
+    // Preserve the original Card Lift interpolation.
+    const range = [-1, -.75, -.5, -.25, 0, .25, .5, .75, 1];
+    const scale = interpolate(-d, range, [.64,.76,.87,.96,1,.94,.85,.74,.64], Extrapolation.CLAMP);
+    const lift = interpolate(-d, range, [0,-.12,-.10,-.045,0,-.08,-.11,-.08,0], Extrapolation.CLAMP);
+    const angle = interpolate(-d, range, [-28,-22,-12,-4,0,3,8,15,24], Extrapolation.CLAMP);
+    return { opacity: interpolate(a, [0, .95, 1], [1, 1, 0], Extrapolation.CLAMP), transform: [{ translateY: (d + lift) * height }, { perspective: 1100 }, { rotateX: `${angle}deg` }, { scale }] };
+  }, [animation, height, index, reducedMotion]);
+  return <Animated.View pointerEvents={active ? 'auto' : 'none'}
+    accessibilityElementsHidden={!active} importantForAccessibility={active ? 'auto' : 'no-hide-descendants'}
+    style={[StyleSheet.absoluteFillObject, { backgroundColor: background, overflow: 'hidden', borderRadius: 18,
+      zIndex: active ? (animation === 'zoom' ? 1 : 2) : (animation === 'zoom' ? 2 : 1), backfaceVisibility: 'hidden' }, style]}>
+    <ReaderStory item={item} height={height} active={active} transitioning={transitioning} {...gestureProps} />
+  </Animated.View>;
 }
 
 export default function NewsReaderScreen() {
@@ -223,20 +401,47 @@ export default function NewsReaderScreen() {
   const news = useAppStore((s) => s.news);
   const theme = useAppStore((s) => s.theme);
   const trackNewsView = useAppStore((s) => s.trackNewsView);
+  const fetchSettings = useAppStore((s) => s.fetchSettings);
+  useEffect(() => { if (!useAppStore.getState().settings) void fetchSettings(); }, [fetchSettings]);
   const isDark = theme === 'dark';
   const [fallbackNews, setFallbackNews] = useState<NewsItem | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [pageHeight, setPageHeight] = useState(0);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const listRef = useRef<FlatList<NewsItem>>(null);
-  const scrollY = useRef(new Animated.Value(0)).current;
+  const position = useSharedValue(0);
+  const locked = useSharedValue(false);
+  const [transitioning, setTransitioning] = useState(false);
+  const [animation, setAnimation] = useState<ReaderAnimation>('lift');
+  const [showAnimations, setShowAnimations] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const preferenceTouched = useRef(false);
+  useEffect(() => {
+    let alive = true;
+    Storage.getItemAsync(ANIMATION_KEY).then(value => {
+      if (alive && !preferenceTouched.current && isAnimation(value)) setAnimation(value);
+    }).catch(() => undefined);
+    AccessibilityInfo.isReduceMotionEnabled().then(value => { if (alive) setReducedMotion(value); }).catch(() => undefined);
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReducedMotion);
+    return () => { alive = false; sub.remove(); };
+  }, []);
+  const selectAnimation = (value: ReaderAnimation) => {
+    preferenceTouched.current = true;
+    setAnimation(value); setShowAnimations(false);
+    void Storage.setItemAsync(ANIMATION_KEY, value).catch(() => undefined);
+  };
+  const onTransitionStart = useCallback(() => setTransitioning(true), []);
+  const onTransitionEnd = useCallback((index: number) => {
+    setCurrentIndex(index); setTransitioning(false);
+  }, []);
+  useEffect(() => { if (!transitioning) locked.value = false; }, [transitioning, currentIndex, locked]);
   const initializedId = useRef<string | undefined>(undefined);
   const viewed = useRef(new Set<string>());
   const insets = useSafeAreaInsets();
 
+  const requestedInFeed = !!requestedId && news.some(n => n._id === requestedId);
   useEffect(() => {
-    if (!requestedId || news.some((n) => n._id === requestedId)) return;
+    if (!requestedId || requestedInFeed) { setLoading(false); setLoadError(false); return; }
     let cancelled = false;
     setLoading(true); setLoadError(false);
     api.getNewsById(requestedId)
@@ -244,23 +449,22 @@ export default function NewsReaderScreen() {
       .catch(() => { if (!cancelled) setLoadError(true); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [requestedId, news]);
+  }, [requestedId, requestedInFeed]);
 
   const stories = useMemo(() => {
     const filtered = news.filter(canDisplay);
-    return fallbackNews && canDisplay(fallbackNews) && !filtered.some((n) => n._id === fallbackNews._id)
+    return fallbackNews && fallbackNews._id === requestedId && canDisplay(fallbackNews) && !filtered.some((n) => n._id === fallbackNews._id)
       ? [fallbackNews, ...filtered] : filtered;
-  }, [news, fallbackNews]);
+  }, [news, fallbackNews, requestedId]);
   const startIndex = useMemo(() => Math.max(0, stories.findIndex((n) => n._id === requestedId)), [stories, requestedId]);
 
-  useEffect(() => {
-    if (!pageHeight || !requestedId || !stories.some((s) => s._id === requestedId)) return;
-    if (initializedId.current === requestedId) return;
-    initializedId.current = requestedId;
+  useLayoutEffect(() => {
+    if (!pageHeight || !stories.length || (requestedId && !stories.some((s) => s._id === requestedId))) return;
+    if (initializedId.current === (requestedId || '__first__')) return;
+    initializedId.current = requestedId || '__first__';
     setCurrentIndex(startIndex);
-    scrollY.setValue(startIndex * pageHeight);
-    requestAnimationFrame(() => listRef.current?.scrollToIndex({ index: startIndex, animated: false }));
-  }, [pageHeight, requestedId, startIndex, stories, scrollY]);
+    position.value = startIndex;
+  }, [pageHeight, requestedId, startIndex, stories, position]);
 
   const markViewed = useCallback((story?: NewsItem) => {
     if (!story || viewed.current.has(story._id)) return;
@@ -268,14 +472,18 @@ export default function NewsReaderScreen() {
     void trackNewsView(story._id);
   }, [trackNewsView]);
   useEffect(() => {
-    if (!pageHeight || initializedId.current !== requestedId) return;
+    if (!pageHeight || transitioning || initializedId.current !== (requestedId || '__first__')) return;
+    if (viewed.current.size === 0 && requestedId && stories[currentIndex]?._id !== requestedId) return;
     markViewed(stories[currentIndex]);
-  }, [pageHeight, currentIndex, stories, requestedId, markViewed]);
+  }, [pageHeight, currentIndex, stories, requestedId, markViewed, transitioning]);
 
   const goTo = (index: number) => {
-    if (index < 0 || index >= stories.length) return;
-    setCurrentIndex(index);
-    listRef.current?.scrollToIndex({ index, animated: true });
+    if (transitioning || locked.value || index < 0 || index >= stories.length || index === currentIndex) return;
+    locked.value = true;
+    setTransitioning(true);
+    position.value = withTiming(index, { duration: reducedMotion ? 120 : 280, easing: Easing.out(Easing.cubic) }, finished => {
+      if (finished) runOnJS(onTransitionEnd)(index);
+    });
   };
 
   const background = isDark ? '#111827' : '#FFFEFC';
@@ -289,6 +497,9 @@ export default function NewsReaderScreen() {
           <Ionicons name="arrow-back" size={24} color={foreground} />
         </Pressable>
         <Text style={[styles.headerTitle, { color: foreground }]}>INMinut <Text style={{ color: ORANGE }}> / Reader</Text></Text>
+        <Pressable onPress={() => setShowAnimations(true)} disabled={transitioning} style={styles.headerButton} accessibilityLabel="Reader animation settings">
+          <Ionicons name="layers-outline" size={23} color={ORANGE} />
+        </Pressable>
       </View>
       <View style={[styles.pager, { backgroundColor: isDark ? '#080D16' : '#E6E1DB' }]} onLayout={(e) => {
         const h = Math.round(e.nativeEvent.layout.height);
@@ -299,73 +510,59 @@ export default function NewsReaderScreen() {
         ) : loadError && !stories.some(s => s._id === requestedId) ? (
           <View style={styles.center}><Text style={{ color: foreground }}>This news could not be loaded.</Text></View>
         ) : pageHeight > 0 && stories.length > 0 && (!requestedId || stories.some(s => s._id === requestedId)) ? (
-          <Animated.FlatList
-            ref={listRef as any} data={stories} keyExtractor={(s) => s._id}
-            renderItem={({ item, index }) => {
-              // A clearly visible card lift: the next story rises from the
-              // bottom center while the outgoing story shrinks and moves away.
-              // Every value follows the gesture, including reverse swipes.
-              const range = [-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1]
-                .map((step) => (index + step) * pageHeight);
-              const scale = scrollY.interpolate({
-                inputRange: range,
-                outputRange: [0.64, 0.76, 0.87, 0.96, 1, 0.94, 0.85, 0.74, 0.64],
-                extrapolate: 'clamp',
-              });
-              const translateY = scrollY.interpolate({
-                inputRange: range,
-                outputRange: [0, -pageHeight * 0.12, -pageHeight * 0.10, -pageHeight * 0.045, 0,
-                  -pageHeight * 0.08, -pageHeight * 0.11, -pageHeight * 0.08, 0],
-                extrapolate: 'clamp',
-              });
-              const rotateX = scrollY.interpolate({
-                inputRange: range,
-                outputRange: ['-28deg', '-22deg', '-12deg', '-4deg', '0deg', '3deg', '8deg', '15deg', '24deg'],
-                extrapolate: 'clamp',
-              });
-              return <View style={{ height: pageHeight, width: '100%', overflow: 'hidden' }}>
-                <Animated.View style={{ flex: 1, backgroundColor: background, borderRadius: 20, overflow: 'hidden',
-                  transform: [{ translateY }, { perspective: 1100 }, { rotateX }, { scale }],
-                  backfaceVisibility: 'hidden' }}>
-                  <ReaderStory item={item} height={pageHeight} active={currentIndex === index} />
-                </Animated.View>
-              </View>;
-            }}
-            pagingEnabled snapToInterval={pageHeight} decelerationRate="fast"
-            removeClippedSubviews={false}
-            showsVerticalScrollIndicator={false} bounces={false}
-            getItemLayout={(_, index) => ({ length: pageHeight, offset: pageHeight * index, index })}
-            initialNumToRender={3} maxToRenderPerBatch={3} windowSize={5}
-            onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
-            scrollEventThrottle={16}
-            onMomentumScrollEnd={(e) => setCurrentIndex(Math.min(stories.length - 1,
-              Math.max(0, Math.round(e.nativeEvent.contentOffset.y / pageHeight))))}
-            onScrollToIndexFailed={({ index }) => listRef.current?.scrollToOffset({ offset: index * pageHeight, animated: false })}
-          />
+          <View style={{ flex: 1, overflow: 'hidden' }}>
+            {stories.slice(Math.max(0, currentIndex - 1), currentIndex + 2).map((item, localIndex) => {
+              const index = Math.max(0, currentIndex - 1) + localIndex;
+              return <ReaderPage key={item._id} item={item} index={index} total={stories.length}
+                height={pageHeight} active={index === currentIndex} transitioning={transitioning}
+                animation={animation} background={background} position={position} locked={locked}
+                onTransitionStart={onTransitionStart} onTransitionEnd={onTransitionEnd} reducedMotion={reducedMotion} />;
+            })}
+          </View>
         ) : !loading && !stories.some(s => s._id === requestedId) ? (
           <View style={styles.center}><Text style={{ color: foreground }}>No news available.</Text></View>
         ) : null}
       </View>
-      {/* {stories.length > 1 && (
-        <View style={[styles.bottomNavigation, { backgroundColor: background, borderTopColor: isDark ? '#334155' : '#E2E8F0' }]}>
-          <Pressable onPress={() => goTo(currentIndex - 1)} disabled={currentIndex === 0}
-            style={[styles.navControl, currentIndex === 0 && styles.disabled]} accessibilityLabel="Previous story">
-            <Ionicons name="chevron-up" size={20} color={foreground} /><Text style={{ color: foreground, fontSize: 12 }}>Previous</Text>
-          </Pressable>
-          <Text style={{ color: isDark ? '#94A3B8' : '#64748B', fontSize: 11 }}>Swipe for next news</Text>
-          <Pressable onPress={() => goTo(currentIndex + 1)} disabled={currentIndex >= stories.length - 1}
-            style={[styles.navControl, currentIndex >= stories.length - 1 && styles.disabled]} accessibilityLabel="Next story">
-            <Text style={{ color: foreground, fontSize: 12 }}>Next</Text><Ionicons name="chevron-down" size={20} color={foreground} />
-          </Pressable>
+      {stories.length > 1 && <View style={[styles.bottomNavigation, { backgroundColor: background, borderTopColor: isDark ? '#334155' : '#E2E8F0' }]}>
+        <Pressable onPress={() => goTo(currentIndex - 1)} disabled={transitioning || currentIndex === 0} style={[styles.navControl, (transitioning || currentIndex === 0) && styles.disabled]} accessibilityLabel="Previous story">
+          <Ionicons name="chevron-up" size={18} color={foreground} /><Text style={{ color: foreground, fontSize: 12, fontWeight: '700' }}>Previous</Text>
+        </Pressable>
+        <Text style={{ color: isDark ? '#94A3B8' : '#64748B', fontSize: 11 }}>Swipe at article edge</Text>
+        <Pressable onPress={() => goTo(currentIndex + 1)} disabled={transitioning || currentIndex >= stories.length - 1} style={[styles.navControl, (transitioning || currentIndex >= stories.length - 1) && styles.disabled]} accessibilityLabel="Next story">
+          <Text style={{ color: foreground, fontSize: 12, fontWeight: '700' }}>Next</Text><Ionicons name="chevron-down" size={18} color={foreground} />
+        </Pressable>
+      </View>}
+      <Modal visible={showAnimations} transparent animationType="fade" onRequestClose={() => setShowAnimations(false)}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowAnimations(false)} accessibilityLabel="Close animation settings" />
+          <View style={[styles.animationSheet, { backgroundColor: background, paddingBottom: Math.max(22, insets.bottom) }]}>
+            <View style={styles.sheetHeading}>
+              <View style={{ flex: 1 }}><Text style={[styles.sheetTitle, { color: foreground }]}>Reader animation</Text><Text style={{ color: isDark ? '#94A3B8' : '#64748B', marginTop: 4 }}>Choose your preferred transition.</Text></View>
+              <Pressable onPress={() => setShowAnimations(false)} style={styles.headerButton} accessibilityLabel="Close"><Ionicons name="close" size={24} color={foreground} /></Pressable>
+            </View>
+            {ANIMATIONS.map(option => <Pressable key={option.id} onPress={() => selectAnimation(option.id)} accessibilityRole="radio" accessibilityState={{ checked: animation === option.id }}
+              style={[styles.animationOption, { borderColor: animation === option.id ? ORANGE : isDark ? '#334155' : '#E2E8F0', backgroundColor: animation === option.id ? (isDark ? '#35251D' : '#FFF7ED') : background }]}>
+              <View style={styles.animationIcon}><Ionicons name={option.icon} size={24} color={ORANGE} /></View>
+              <View style={{ flex: 1 }}><Text style={{ color: foreground, fontWeight: '800', fontSize: 15 }}>{option.title}</Text><Text style={{ color: isDark ? '#94A3B8' : '#64748B', fontSize: 12, marginTop: 3 }}>{option.description}</Text></View>
+              <Ionicons name={animation === option.id ? 'checkmark-circle' : 'ellipse-outline'} size={23} color={animation === option.id ? ORANGE : '#94A3B8'} />
+            </Pressable>)}
+            <Text style={{ color: isDark ? '#94A3B8' : '#64748B', fontSize: 12, marginTop: 8 }}>{reducedMotion ? 'Reduced motion is enabled in device settings.' : 'Your preference is saved automatically.'}</Text>
+          </View>
         </View>
-      )} */}
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: '#0008' },
+  animationSheet: { borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 20, gap: 10 },
+  sheetHeading: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  sheetTitle: { fontSize: 22, fontWeight: '900' },
+  animationOption: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderWidth: 1, borderRadius: 16 },
+  animationIcon: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F9731620', borderRadius: 12 },
   screen: { flex: 1 }, pager: { flex: 1, overflow: 'hidden' }, center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  header: { height: 54, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, borderBottomWidth: 0 },
+  header: { height: 54, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   headerButton: { width: 46, height: 46, justifyContent: 'center', alignItems: 'center' },
   headerTitle: { flex: 1, fontWeight: '800', fontSize: 18, marginLeft: 6 },
   articleScroll: { flex: 1 }, hero: { overflow: 'hidden', backgroundColor: '#0B1220', justifyContent: 'center', borderRadius: 16, marginBottom: 22 },
@@ -377,7 +574,7 @@ const styles = StyleSheet.create({
   actionGroup: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   iconButton: { width: 41, height: 39, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   whatsappButton: { backgroundColor: '#25D366' },
-  articleBody: { width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: 20, paddingTop: 24, paddingBottom: 38, flexGrow: 1 },
+  articleBody: { width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 24, flexGrow: 1 },
   editorialRule: { height: StyleSheet.hairlineWidth, marginTop: 18 },
   locationRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 10 },
   byline: { flexDirection: 'row', alignItems: 'center', gap: 9, marginTop: 5 },

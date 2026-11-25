@@ -38,6 +38,7 @@ if (Platform.OS !== "web") {
   }
 }
 import BrandedShareImage from "@/components/BrandedShareImage";
+import { getShareImageCandidates } from "@/utils/newsImages";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
 const INITIAL_CARD_WIDTH = Dimensions.get("window").width - 32;
@@ -132,13 +133,14 @@ export default function NewsCard({
   const nonImageMedia = (item.media || []).filter(
     (m) => !!m.url && m.type !== "image",
   );
-  const hasAnyMedia = images.length > 0 || nonImageMedia.length > 0;
+  const shareCandidates = getShareImageCandidates(item.media, settings);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(0);
   const [sharing, setSharing] = useState(false);
   const [whatsappSharing, setWhatsappSharing] = useState(false);
   const [shareImageUri, setShareImageUri] = useState<string | null>(null);
+  const [captureFallbacks, setCaptureFallbacks] = useState<string[]>([]);
   const brandedShareRef = useRef<View>(null);
   const shareCaptureReadyRef = useRef(false);
   const shareCaptureResolverRef = useRef<(() => void) | null>(null);
@@ -363,30 +365,13 @@ export default function NewsCard({
   const shareFirstImageAsBrandedPng = async () => {
     if (Platform.OS === "web") {
       Alert.alert("Share", "Image sharing is not supported on web preview.");
-      return;
+      return false;
     }
-    const hasImage = images.length > 0;
-    const firstImage = images[0];
-
-    const firstImageUrl = hasImage
-      ? getMediaUrl(firstImage?.url)
-      : settings?.defaultShareImage
-        ? getMediaUrl(settings.defaultShareImage)
-        : "breaking_placeholder";
-    if (!firstImageUrl)
-      return shareNewsDirect({
-        title: item.title,
-        description: item.description,
-        content: item.content,
-        media: item.media || [],
-        hashtags: item.hashtags || [],
-        cities: item.cities || [],
-        publishedDate: item.publishedDate,
-        link: `${NEWS_BASE_URL}/${item._id}`,
-      });
-
+    const firstImageUrl = shareCandidates[0];
+    setCaptureFallbacks(shareCandidates.slice(1));
+    const ready = waitForShareCaptureReady();
     setShareImageUri(firstImageUrl);
-    await waitForShareCaptureReady();
+    await ready;
 
     if (!brandedShareRef.current) {
       throw new Error("Branded share image is not ready.");
@@ -405,15 +390,16 @@ export default function NewsCard({
 
     if (!Share) {
       Alert.alert("Share", "Sharing is not available in Expo Go. Please use a development build.");
-      return;
+      return false;
     }
-    return Share.open({
+    const result = await Share.open({
       url: imageUrl,
       type: "image/jpeg",
       message: buildShareMessage(),
       title: item.title || "Share INMinut news",
       failOnCancel: false,
     });
+    return result?.success !== false;
   };
 
   const buildShareMessage = () => {
@@ -437,13 +423,11 @@ export default function NewsCard({
     try {
       setWhatsappSharing(true);
 
-      const firstImageUrl =
-        images.length > 0
-          ? getMediaUrl(images[0]?.url)
-          : "breaking_placeholder";
-
+      const firstImageUrl = shareCandidates[0];
+      setCaptureFallbacks(shareCandidates.slice(1));
+      const ready = waitForShareCaptureReady();
       setShareImageUri(firstImageUrl);
-      await waitForShareCaptureReady();
+      await ready;
 
       if (!brandedShareRef.current) {
         throw new Error("Branded share image is not ready.");
@@ -466,7 +450,7 @@ export default function NewsCard({
         Alert.alert("Share", "WhatsApp sharing is not available in Expo Go. Please use a development build.");
         return;
       }
-      await Share.shareSingle({
+      const result = await Share.shareSingle({
         social: Share.Social.WHATSAPP,
         url: imageUrl,
         type: "image/jpeg",
@@ -474,7 +458,7 @@ export default function NewsCard({
         failOnCancel: false,
       });
 
-      await trackNewsShare(item._id);
+      if (result?.success !== false) await trackNewsShare(item._id);
     } catch (error: any) {
       console.error("WhatsApp image share failed:", error);
 
@@ -678,16 +662,8 @@ export default function NewsCard({
             </View>
           )}
         </View>
-      ) : !hasAnyMedia ? null : // <View style={styles.emptyImage}>
-      //   <Ionicons name="newspaper-outline" size={42} color={AppPalette.brightOrange} />
-      //   {item.isBreaking && (
-      //     <View style={styles.breakingBadge}>
-      //       <Ionicons name="flash" size={13} color="#fff" />
-      //       <Text style={styles.breakingText}>{breakingLabel}</Text>
-      //     </View>
-      //   )}
-      // </View>
-      null}
+      ) : null}
+
 
       <View style={styles.content}>
         <Pressable onPress={onOpen} disabled={!onOpen} style={styles.metaHeader}>
@@ -737,7 +713,7 @@ export default function NewsCard({
                   >
                     <Ionicons
                       name="location-outline"
-                      size={12}
+                      size={11}
                       color={AppPalette.brightOrange}
                     />
                     <Text
@@ -1076,10 +1052,11 @@ export default function NewsCard({
           >
             <BrandedShareImage
               imageUri={shareImageUri}
+              fallbackImageUris={captureFallbacks}
               imageHeight={
                 shareImageUri === "breaking_placeholder"
                   ? 850
-                  : shareImageUri === getMediaUrl(settings?.defaultShareImage || "")
+                  : !images.some(image => getMediaUrl(image.url) === shareImageUri)
                     ? 850
                     : Math.round(972 / (imageRatios[images[0]?.url] || 1.35))
               }
@@ -1090,7 +1067,7 @@ export default function NewsCard({
               titleFontSize={titleFontSize}
               descriptionFontSize={descriptionFontSize}
               publishedDate={item.publishedDate}
-              reporterName={item.reporter?.name}
+              reporterName={item.hideReporter ? undefined : item.reporter?.name}
               isBreaking={item.isBreaking}
               breakingText={item.breakingText}
               breakingTextColor={
@@ -1252,7 +1229,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 999,
   },
-  categoryText: { fontSize: 11, fontWeight: "900", textTransform: "uppercase" },
+  categoryText: { fontSize: 8, fontWeight: "900", textTransform: "uppercase" },
   cityChipsWrap: {
     flex: 1,
     minWidth: 0,
@@ -1276,8 +1253,8 @@ const styles = StyleSheet.create({
   cityChipText: {
     flexShrink: 1,
     color: AppPalette.deepBlue,
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 8,
+    lineHeight: 12,
     fontWeight: "800",
   },
   dateRow: {
@@ -1287,7 +1264,7 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingTop: 4,
   },
-  date: { fontSize: 12, color: AppPalette.muted, fontWeight: "700" },
+  date: { fontSize: 11, color: AppPalette.muted, fontWeight: "700" },
   titleRow: {
     flexDirection: "row",
     alignItems: "flex-start",

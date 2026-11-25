@@ -35,6 +35,10 @@ This index reflects the uploaded repository snapshot (2026-11-24). Check source 
 - `eas.json`: dev APK, internal preview, production channel with auto increment.
 - `.env.example`: documented variable template (never mistake placeholder LAN address for production).
 
+## Embeds
+- Home fetches enabled embeds by selected category (`all` means global only); Explore uses isolated search results.
+- `components/EmbedCard.tsx` owns external navigation, URL conversion and click debounce. See `.agents/skills/embeds-webview/SKILL.md`.
+
 ## Search shortcuts
 | User asks about | First files to inspect |
 | --- | --- |
