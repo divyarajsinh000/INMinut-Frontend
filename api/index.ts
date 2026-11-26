@@ -74,8 +74,12 @@ export interface EmbedItem {
   embedCode: string;
   shareUrl?: string; 
   height: number;
-    width?: number | null;
+  width?: number | null;
   autoSize?: boolean;
+  widthMode?: "fill" | "contain" | "original";
+  paddingHorizontal?: number;
+  paddingVertical?: number;
+  alignment?: "left" | "center" | "right";
   positionAfterNews: number;
   isEnabled: boolean;
   categories?: any[];

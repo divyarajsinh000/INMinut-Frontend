@@ -41,7 +41,7 @@ module.exports = ({ config }) => ({
     predictiveBackGestureEnabled: false,
     package: "com.inminut",
     googleServicesFile: "./google-services.json",
-    permissions: ["NOTIFICATIONS", "RECEIVE_BOOT_COMPLETED", "VIBRATE"],
+    permissions: ["POST_NOTIFICATIONS", "RECEIVE_BOOT_COMPLETED", "VIBRATE"],
     blockedPermissions: [
       "android.permission.ACCESS_COARSE_LOCATION",
       "android.permission.ACCESS_FINE_LOCATION",

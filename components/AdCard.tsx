@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import * as WebBrowser from 'expo-web-browser';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -19,9 +19,12 @@ interface AdCardProps {
   item: Ad;
 }
 
+// Legacy API height is used only while image dimensions are unavailable.
+const AD_REFERENCE_WIDTH = 332;
+
 const normalizeHeight = (value: unknown) => {
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? Math.max(80, parsed) : 250;
+  return Number.isFinite(parsed) && parsed > 0 ? Math.max(80, parsed) : 250;
 };
 
 const getImageUrl = (value?: string) => {
@@ -30,10 +33,15 @@ const getImageUrl = (value?: string) => {
 };
 
 export default function AdCard({ item }: AdCardProps) {
-  const { trackAdInteraction } = useAppStore();
+  const trackAdInteraction = useAppStore((state) => state.trackAdInteraction);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const imageHeight = normalizeHeight((item as Ad & { height?: number }).height);
+  const imageUrl = getImageUrl(item.bannerImage);
+  const [loadedRatio, setLoadedRatio] = useState<{ uri: string; ratio: number } | null>(null);
+  const aspectRatio = loadedRatio?.uri === imageUrl && loadedRatio.ratio > 0
+    ? loadedRatio.ratio
+    : AD_REFERENCE_WIDTH / imageHeight;
 
   useEffect(() => {
     trackAdInteraction(item._id, 'view');
@@ -61,11 +69,25 @@ export default function AdCard({ item }: AdCardProps) {
       accessibilityRole="button"
       accessibilityLabel={`Open ${item.name || 'advertisement'}`}
     >
-      <View style={[styles.imageWrap, { height: imageHeight }]}>
+      <View style={[styles.imageWrap, { aspectRatio }]}>
         <Image
-          source={{ uri: getImageUrl(item.bannerImage) }}
+          key={imageUrl}
+          source={{ uri: imageUrl }}
+          onLoad={({ source }) => {
+            const { width, height } = source;
+            if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
+              const ratio = width / height;
+              setLoadedRatio((previous) =>
+                previous?.uri === imageUrl && previous.ratio === ratio
+                  ? previous
+                  : { uri: imageUrl, ratio }
+              );
+            }
+          }}
           style={styles.image}
-          contentFit="cover"
+          contentFit="contain"
+          cachePolicy="memory-disk"
+          transition={0}
           contentPosition="center"
         />
 

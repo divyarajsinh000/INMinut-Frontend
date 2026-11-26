@@ -82,25 +82,37 @@ export default function RootLayout() {
 
   useEffect(() => {
     loadTheme();
-    registerGuestForPushNotifications();
-
     const notificationResponseSubscription =
       setupNotificationResponseListener();
 
-    const appStateSubscription = AppState.addEventListener(
-      "change",
-      (state) => {
-        if (state === "active") {
-          registerGuestForPushNotifications();
-        }
-      },
-    );
-
     return () => {
       notificationResponseSubscription?.remove?.();
-      appStateSubscription?.remove?.();
     };
   }, [loadTheme]);
+
+  useEffect(() => {
+    if ((!loaded && !error) || showCustomSplash || !playCheckFinished) return;
+
+    // Request only after the main screen and startup update check are ready.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const registerWhenActive = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (AppState.currentState === "active") {
+          void registerGuestForPushNotifications();
+        }
+      }, 500);
+    };
+    registerWhenActive();
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") registerWhenActive();
+      else if (timer) clearTimeout(timer);
+    });
+    return () => {
+      if (timer) clearTimeout(timer);
+      subscription.remove();
+    };
+  }, [loaded, error, showCustomSplash, playCheckFinished]);
 
   const handleCustomSplashFinish = useCallback(() => {
     setShowCustomSplash(false);

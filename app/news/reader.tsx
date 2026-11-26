@@ -90,7 +90,7 @@ function ReaderStory({ item, height, active, transitioning, index, total, positi
       const touch = e.allTouches[0];
       const dx = touch.absoluteX - touchX.value, dy = touch.absoluteY - touchY.value;
       if (Math.abs(dx) > 10 && Math.abs(dx) >= Math.abs(dy)) { manager.fail(); return; }
-      if (Math.abs(dy) < 10) return;
+      if (Math.abs(dy) < 5) return;
       if ((dy < 0 && startedAtBottom.value && index < total - 1) ||
           (dy > 0 && startedAtTop.value && index > 0)) {
         pageDirection.value = dy < 0 ? 1 : -1;
@@ -128,8 +128,8 @@ function ReaderStory({ item, height, active, transitioning, index, total, positi
   const { width, height: screenHeight } = useWindowDimensions();
   const theme = useAppStore((s) => s.theme);
   const settings = useAppStore((s) => s.settings);
-  const likedNews = useAppStore((s) => s.likedNews);
-  const savedNews = useAppStore((s) => s.savedNews);
+  const isLiked = useAppStore((s) => s.likedNews.includes(item._id));
+  const isSaved = useAppStore((s) => s.savedNews.includes(item._id));
   const toggleLikedNews = useAppStore((s) => s.toggleLikedNews);
   const toggleSavedNews = useAppStore((s) => s.toggleSavedNews);
   const trackNewsShare = useAppStore((s) => s.trackNewsShare);
@@ -151,8 +151,8 @@ function ReaderStory({ item, height, active, transitioning, index, total, positi
   const [sharing, setSharing] = useState(false);
   const [whatsappSharing, setWhatsappSharing] = useState(false);
   const titleLink = normalizeUrl(item.titleLink || item.title_link);
-  const isLiked = likedNews.includes(item._id);
-  const isSaved = savedNews.includes(item._id);
+
+
   const maxMediaHeight = Math.max(220, Math.round(screenHeight * 0.59));
   const mediaRatio = images[imageIndex]?.url ? imageRatios[images[imageIndex].url] : undefined;
   const mediaHeight = mediaRatio
@@ -223,18 +223,9 @@ function ReaderStory({ item, height, active, transitioning, index, total, positi
       const message = `${item.title || 'INMinut News'}\n${storyUrl}`;
       if (Platform.OS === 'web') {
         await openExternal(`https://wa.me/?text=${encodeURIComponent(message)}`);
-      } else if (!videos.length && !otherMedia.length) {
-        if (!(await shareBranded(true))) return;
       } else {
-        // Preserve existing link sharing for video/PDF articles in the reader.
-        let NativeShare: any;
-        try { NativeShare = require('react-native-share').default; } catch { NativeShare = null; }
-        if (NativeShare?.shareSingle) {
-          const result = await NativeShare.shareSingle({ social: NativeShare.Social.WHATSAPP, message, failOnCancel: false });
-          if (result?.success === false) return;
-        } else {
-          await openExternal(`https://wa.me/?text=${encodeURIComponent(message)}`);
-        }
+        // WhatsApp always shares the branded news image, even with PDF/video attachments.
+        if (!(await shareBranded(true))) return;
       }
       await trackNewsShare(item._id);
     } catch (error: any) {
@@ -250,6 +241,7 @@ function ReaderStory({ item, height, active, transitioning, index, total, positi
     <Animated.ScrollView style={[styles.articleScroll, { height, backgroundColor: bg }]}
       contentContainerStyle={{ flexGrow: 1 }}
       scrollEnabled={active && !transitioning}
+      decelerationRate="normal"
       onScroll={onArticleScroll} scrollEventThrottle={16}
       onContentSizeChange={(_, h) => { contentSize.value = h; }}
       onLayout={(e) => { viewport.value = e.nativeEvent.layout.height; }}
@@ -307,6 +299,7 @@ function ReaderStory({ item, height, active, transitioning, index, total, positi
               <Pressable key={`${image.url}-${index}`} onPress={() => { setImageIndex(index); setPreviewVisible(true); }}>
                 <Image source={{ uri: getMediaUrl(image.url) }}
                   style={{ width: articleWidth, height: mediaHeight }} contentFit="contain"
+                  cachePolicy="memory-disk" transition={0} priority={active ? "high" : "normal"}
                   onLoad={(e: any) => {
                     const w = Number(e?.source?.width || 0);
                     const h = Number(e?.source?.height || 0);

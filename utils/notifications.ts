@@ -138,9 +138,11 @@ export const setupAndroidNotificationChannel = async () => {
 // A push token is an optional property, not proof that the app was installed.
 let registeringGuest: Promise<string | null> | null = null;
 let lastSuccessfulRegistrationAt = 0;
+let lastRegisteredPermission: boolean | undefined;
+let lastRegisteredToken: string | undefined;
+let permissionRequestedThisSession = false;
 export const registerGuestForPushNotifications = (): Promise<string | null> => {
   if (registeringGuest) return registeringGuest;
-  if (Date.now() - lastSuccessfulRegistrationAt < 30 * 60 * 1000) return Promise.resolve(null);
   registeringGuest = (async () => {
     const deviceId = await getOrCreateDeviceId();
     const guestId = await getOrCreateGuestId();
@@ -149,12 +151,18 @@ export const registerGuestForPushNotifications = (): Promise<string | null> => {
     try {
       await setupAndroidNotificationChannel();
       if (Device.isDevice) {
-        const permission = await Notifications.getPermissionsAsync();
-        let status = permission.status;
-        if (status === 'undetermined') {
-          status = (await Notifications.requestPermissionsAsync()).status;
+        let permission = await Notifications.getPermissionsAsync();
+        if (!permission.granted && permission.canAskAgain && !permissionRequestedThisSession) {
+          permissionRequestedThisSession = true;
+          permission = await Notifications.requestPermissionsAsync();
         }
-        notificationsEnabled = status === 'granted';
+        notificationsEnabled = permission.granted;
+        // Check permission before throttling; changes from system settings must sync immediately.
+        if (lastRegisteredPermission === notificationsEnabled &&
+            (!notificationsEnabled || lastRegisteredToken) &&
+            Date.now() - lastSuccessfulRegistrationAt < 30 * 60 * 1000) {
+          return lastRegisteredToken || null;
+        }
         const projectId = Constants.easConfig?.projectId || Constants.expoConfig?.extra?.eas?.projectId;
         if (notificationsEnabled && projectId) {
           expoPushToken = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
@@ -179,11 +187,16 @@ export const registerGuestForPushNotifications = (): Promise<string | null> => {
         cityPreferences,
       });
       lastSuccessfulRegistrationAt = Date.now();
+      lastRegisteredPermission = notificationsEnabled;
+      lastRegisteredToken = expoPushToken;
     } catch (error) {
       logger('Guest device registration failed:', error);
     }
     return expoPushToken || null;
-  })().finally(() => { registeringGuest = null; });
+  })().catch((error) => {
+    logger('Guest registration initialization failed:', error);
+    return null;
+  }).finally(() => { registeringGuest = null; });
   return registeringGuest;
 };
 

@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, memo } from "react";
 import { AppPalette, Colors } from "@/constants/theme";
 import { MediaItem, NewsItem } from "@/api";
 import { formatDate } from "@/utils";
@@ -93,13 +93,17 @@ const normalizeExternalUrl = (value: unknown) => {
   return `https://${trimmed}`;
 };
 
-export default function NewsCard({
+function NewsCard({
   item,
   onOpen,
   onMediaLayout,
   onActionsLayout,
 }: NewsCardProps) {
-  const { savedNews, toggleSavedNews, likedNews, toggleLikedNews, trackNewsShare, settings, setSearchQuery } = useAppStore();
+  const toggleSavedNews = useAppStore(s => s.toggleSavedNews);
+  const toggleLikedNews = useAppStore(s => s.toggleLikedNews);
+  const trackNewsShare = useAppStore(s => s.trackNewsShare);
+  const settings = useAppStore(s => s.settings);
+  const setSearchQuery = useAppStore(s => s.setSearchQuery);
   const mediaRef = useRef<View>(null);
   const imageScrollRef = useRef<ScrollView>(null);
   const actionsRef = useRef<View>(null);
@@ -127,8 +131,8 @@ export default function NewsCard({
       }, 350);
     }
   };
-  const isSaved = savedNews.includes(item._id);
-  const isLiked = likedNews.includes(item._id);
+  const isSaved = useAppStore(s => s.savedNews.includes(item._id));
+  const isLiked = useAppStore(s => s.likedNews.includes(item._id));
 const allCategories = useAppStore((s) => s.categories);
 
 const [failedImages, setFailedImages] = useState<string[]>([]);
@@ -660,7 +664,7 @@ const displayCategories = rawCategories
             }
             handleMediaLayout();
           }}
-          style={[styles.imageWrap, { height: activeImageHeight }]}
+          style={[styles.imageWrap, { height: activeImageHeight, backgroundColor: isDark ? "#1E293B" : "#F1F5F9" }]}
         >
           <ScrollView
              key={JSON.stringify([
@@ -705,6 +709,7 @@ const displayCategories = rawCategories
                     minWidth: mediaWidth,
                     maxWidth: mediaWidth,
                     height: activeImageHeight,
+                    backgroundColor: isDark ? "#1E293B" : "#F1F5F9",
                   },
                 ]}
               >
@@ -719,13 +724,11 @@ const displayCategories = rawCategories
   ]}
   contentFit="cover"
   contentPosition="center"
-  transition={150}
+  transition={0}
   cachePolicy="memory-disk"
-  recyclingKey={`${item._id}-${media.url}-${imageRetryKey}`}
+  priority={index === activeImageIndex ? "high" : "normal"}
 onLoad={(event) => {
   handleImageLoad(media, event);
-}}
-onDisplay={() => {
   const url = getMediaUrl(media.url);
 
   setLoadedImages((prev) =>
@@ -745,9 +748,7 @@ onError={(event) => {
     style={[
       styles.imageLoadingOverlay,
       {
-        backgroundColor: isDark
-          ? "#1E293B"
-          : "#F8FAFC",
+        backgroundColor: "transparent",
       },
     ]}
   >
@@ -815,9 +816,7 @@ onError={(event) => {
     style={[
       styles.imageRetryBar,
       {
-        backgroundColor: isDark
-          ? "#1E293B"
-          : "#F8FAFC",
+        backgroundColor: "transparent",
         borderBottomColor: isDark
           ? "#334155"
           : "#E2E8F0",
@@ -1307,6 +1306,8 @@ onError={(event) => {
   );
 }
 
+export default memo(NewsCard);
+
 const styles = StyleSheet.create({
   container: {
     marginBottom: 10,
@@ -1342,8 +1343,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   image: {
-    backgroundColor: "#FFFFFF",
-    transform: [{ scale: 1.015 }],
+    backgroundColor: "transparent",
   },
   imageDots: {
     position: "absolute",

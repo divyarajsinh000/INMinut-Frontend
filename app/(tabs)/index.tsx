@@ -11,7 +11,7 @@ import {
   ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, memo } from "react";
 import { Image as ExpoImage } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
@@ -35,7 +35,7 @@ import { Ad, NewsItem, EmbedItem, Category, api } from "@/api";
 import { AppPalette } from "@/constants/theme";
 import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "@/utils/storage";
-import { getMediaUrl } from "@/utils/media";
+import { getImageMedia, getMediaUrl } from "@/utils/media";
 
 const CITY_PREFERENCE_SETUP_KEY = "city_preference_setup_done";
 
@@ -62,6 +62,11 @@ const hasRenderableNews = (item: NewsItem) => {
   const hasMedia = (item.media || []).some((media) => !!media?.url);
   return hasText || hasMedia;
 };
+
+const FeedNewsCard = memo(function FeedNewsCard({ item }: { item: NewsItem }) {
+  const open = useCallback(() => router.push({ pathname: "/news/reader", params: { id: item._id } }), [item._id]);
+  return <NewsCard item={item} onOpen={open} />;
+});
 
 export default function HomeScreen() {
   const params = useLocalSearchParams<{
@@ -143,6 +148,11 @@ export default function HomeScreen() {
   const [openedNewsSource, setOpenedNewsSource] = useState<
     "share" | "notification" | null
   >(null);
+  const [activeEmbedKey, setActiveEmbedKey] = useState<string | null>(null);
+  const handleEmbedInteraction = useCallback((key: string, active: boolean) => {
+    setActiveEmbedKey(previous => active ? key : previous === key ? null : previous);
+  }, []);
+  useEffect(() => { setActiveEmbedKey(null); }, [selectedCategory, isFocused]);
   const newsListRef = useRef<FlatList<FeedItem>>(null);
   const categoryScrollRef = useRef<ScrollView>(null);
   const categoryLayouts = useRef<Record<string, { x: number; width: number }>>(
@@ -219,13 +229,35 @@ export default function HomeScreen() {
   const refreshInProgressRef = useRef(false);
 
   const viewedNewsIdsRef = useRef<Set<string>>(new Set());
+  const feedForPrefetch = useRef<FeedItem[]>([]);
+  const prefetchedUrls = useRef(new Set<string>());
+  const prefetchBusy = useRef(false);
+  const prefetchNearbyImages = useCallback((start: number) => {
+    if (prefetchBusy.current) return;
+    const urls = feedForPrefetch.current.slice(Math.max(0, start), Math.max(0, start) + 6)
+      .flatMap((entry) => entry.type === "news"
+        ? getImageMedia(entry.data.media || []).slice(0, 1).map((media) => getMediaUrl(media.url))
+        : [])
+      .filter((url) => !!url && !prefetchedUrls.current.has(url));
+    const unique = [...new Set(urls)];
+    if (!unique.length) return;
+    prefetchBusy.current = true;
+    void ExpoImage.prefetch(unique, "memory-disk").then((ok) => {
+      if (ok) {
+        if (prefetchedUrls.current.size > 250) prefetchedUrls.current.clear();
+        unique.forEach((url) => prefetchedUrls.current.add(url));
+      }
+    }).catch(() => undefined).finally(() => { prefetchBusy.current = false; });
+  }, []);
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
   const onViewableItemsChanged = useRef(
     ({
       viewableItems,
     }: {
-      viewableItems: Array<{ item: FeedItem; isViewable: boolean }>;
+      viewableItems: Array<{ item: FeedItem; isViewable: boolean; index: number | null }>;
     }) => {
+      const indices = viewableItems.filter((entry) => entry.isViewable && entry.index !== null).map((entry) => entry.index as number);
+      if (indices.length) prefetchNearbyImages(Math.min(...indices));
       viewableItems.forEach(({ item, isViewable }) => {
         if (!isViewable || item.type !== "news") return;
         const newsId = item.data._id;
@@ -368,10 +400,10 @@ export default function HomeScreen() {
     [selectedCityPreferences, saveCityPreferences],
   );
 
-  const categorySwipeGesture = Gesture.Pan()
+  const categorySwipeGesture = Gesture.Pan().enabled(!activeEmbedKey)
     // Let the news feed keep handling normal vertical scrolling.
     .activeOffsetX([-24, 24])
-    .failOffsetY([-24, 24])
+    .failOffsetY([-8, 8])
     .onEnd((event) => {
       const isSwipeLeft = event.translationX < -60 || event.velocityX < -650;
       const isSwipeRight = event.translationX > 60 || event.velocityX > 650;
@@ -599,6 +631,10 @@ export default function HomeScreen() {
       ]
     : regularFeedItems;
 
+  useEffect(() => {
+    feedForPrefetch.current = displayedFeedItems;
+  }, [displayedFeedItems]);
+
   const renderItem = ({ item, index }: { item: FeedItem; index: number }) => {
     if (item.type === "section") {
       return (
@@ -612,17 +648,9 @@ export default function HomeScreen() {
       );
     }
     if (item.type === "ad") return <AdCard item={item.data} />;
-    if (item.type === "embed") return <EmbedCard item={item.data} />;
+    if (item.type === "embed") return <EmbedCard item={item.data} interactionKey={item.key} onInteractionChange={handleEmbedInteraction} />;
     return (
-      <NewsCard
-        item={item.data}
-        onOpen={() =>
-          router.push({
-            pathname: "/news/reader",
-            params: { id: item.data._id },
-          })
-        }
-      />
+      <FeedNewsCard item={item.data} />
     );
   };
 
@@ -902,6 +930,13 @@ export default function HomeScreen() {
                 style={styles.newsList}
                 scrollIndicatorInsets={{ bottom: 96 }}
                 showsVerticalScrollIndicator={false}
+                nestedScrollEnabled={true}
+directionalLockEnabled={true}
+scrollEnabled={!activeEmbedKey}
+                removeClippedSubviews={false}
+                initialNumToRender={5}
+                maxToRenderPerBatch={6}
+                windowSize={9}
                 ListEmptyComponent={
                   <View>
                     <Text
@@ -940,6 +975,7 @@ export default function HomeScreen() {
                 viewabilityConfig={viewabilityConfig}
                 refreshControl={
                   <RefreshControl
+                    enabled={!activeEmbedKey}
                     refreshing={isRefreshingAll || isLoading}
                     onRefresh={loadData}
                     tintColor={AppPalette.brightOrange}

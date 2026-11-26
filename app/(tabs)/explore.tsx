@@ -97,6 +97,9 @@ export default function SearchScreen() {
               keyExtractor={(item) => item.key}
               contentContainerStyle={styles.listContainer}
               showsVerticalScrollIndicator={false}
+              nestedScrollEnabled={true}
+directionalLockEnabled={true}
+scrollEnabled={true}
             />
           ) : (
             <Text style={[styles.stateText, { color: themeStyles.textSecondary }]}>{searchError ? 'Unable to search right now. Please try again.' : 'No results found'}</Text>
